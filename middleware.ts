@@ -5,6 +5,12 @@ import { Database } from '@/lib/supabase/types';
 const PUBLIC_ROUTES = ['/login', '/auth/callback', '/api/auth/magic-link'];
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  if (pathname.startsWith('/auth/callback')) {
+    return NextResponse.next({ request });
+  }
+
   const response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -26,7 +32,7 @@ export async function middleware(request: NextRequest) {
   );
 
   const { data } = await supabase.auth.getUser();
-  const isPublic = PUBLIC_ROUTES.some((route) => request.nextUrl.pathname.startsWith(route));
+  const isPublic = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
 
   if (!data.user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -34,7 +40,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (data.user && request.nextUrl.pathname === '/login') {
+  if (data.user && pathname === '/login') {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
