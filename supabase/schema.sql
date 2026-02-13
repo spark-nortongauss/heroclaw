@@ -63,3 +63,25 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "auth users can read/write requests" on public.mc_requests for all using (auth.uid() is not null) with check (auth.uid() is not null);
 exception when duplicate_object then null; end $$;
+
+-- Enforce company-only authentication accounts at the database layer.
+-- Any auth.users insert with an email outside @nortongauss.com is rejected.
+create or replace function auth.enforce_nortongauss_email_domain()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.email is null or new.email !~* '@nortongauss\.com$' then
+    raise exception 'auth.users email must end with @nortongauss.com';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_nortongauss_email_domain_before_insert on auth.users;
+
+create trigger enforce_nortongauss_email_domain_before_insert
+before insert on auth.users
+for each row
+execute function auth.enforce_nortongauss_email_domain();
