@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/lib/supabase/types";
 
 const ALLOWED_EMAIL_REGEX = /^[a-z0-9._%+-]+@nortongauss\.com$/i;
 const DOMAIN_RESTRICTION_MESSAGE =
@@ -22,7 +23,7 @@ function getRequestOrigin(request: Request) {
   return requestUrl.origin;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as
     | { email?: string }
     | null;
@@ -41,10 +42,22 @@ export async function POST(request: Request) {
     DEFAULT_REDIRECT_PATH
   )}`;
 
-  const supabase = createClient(
+  const response = NextResponse.json({ success: true });
+
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
       auth: {
         flowType: "pkce",
       },
@@ -60,5 +73,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true });
+  return response;
 }
