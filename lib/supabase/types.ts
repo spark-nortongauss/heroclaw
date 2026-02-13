@@ -28,26 +28,26 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['mc_tickets']['Insert']>;
       };
-      mc_comments: {
+      mc_ticket_comments: {
         Row: {
           id: string;
           ticket_id: string;
-          author_user_id: string | null;
-          author_agent_id: string | null;
+          author_agent_id: string;
           body: string;
-          meta: Json;
+          note_type: string;
+          metadata: Json | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           ticket_id: string;
-          author_user_id?: string | null;
-          author_agent_id?: string | null;
+          author_agent_id: string;
           body: string;
-          meta?: Json;
+          note_type?: string;
+          metadata?: Json | null;
           created_at?: string;
         };
-        Update: Partial<Database['public']['Tables']['mc_comments']['Insert']>;
+        Update: Partial<Database['public']['Tables']['mc_ticket_comments']['Insert']>;
       };
       mc_chat_messages: {
         Row: {
