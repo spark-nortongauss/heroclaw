@@ -12,16 +12,15 @@ function getSafeNextPath(nextPath: string | null) {
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
-
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type") as EmailOtpType | null;
+  const next = url.searchParams.get("next");
 
-  const nextPath = getSafeNextPath(url.searchParams.get("next"));
+  const nextPath = getSafeNextPath(next);
   const redirectTo = new URL(nextPath, url.origin);
   const loginUrl = new URL("/login?error=auth_callback", url.origin);
 
-  // This response is what will receive the auth cookies (IMPORTANT)
   const response = NextResponse.redirect(redirectTo);
 
   const supabase = createServerClient<Database>(
@@ -41,28 +40,27 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  // Most common flow for magic links in modern Supabase Auth:
-  // exchange the `code` for a session (sets cookies on `response`)
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return response;
+    if (!error) {
+      return response;
+    }
 
-    // failed exchange -> go to login
     return NextResponse.redirect(loginUrl);
   }
 
-  // Fallback for older / alternative flows where Supabase sends token_hash + type
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({
       type,
       token_hash: tokenHash,
     });
 
-    if (!error) return response;
+    if (!error) {
+      return response;
+    }
 
     return NextResponse.redirect(loginUrl);
   }
 
-  // If neither param exists, it's not a valid callback
   return NextResponse.redirect(loginUrl);
 }
