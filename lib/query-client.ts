@@ -30,7 +30,7 @@ export async function fetchTicketCounts() {
 export async function fetchRecentActivity() {
   const supabase = createClient();
   const [commentsRes, requestsRes] = await Promise.all([
-    supabase.from('mc_comments').select('id, body, created_at').order('created_at', { ascending: false }).limit(5),
+    supabase.from('mc_ticket_comments').select('id, body, created_at').order('created_at', { ascending: false }).limit(5),
     supabase.from('mc_requests').select('id, request_type, status, created_at').order('created_at', { ascending: false }).limit(5)
   ]);
 
