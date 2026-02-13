@@ -8,6 +8,7 @@ const DEFAULT_REDIRECT_PATH = "/tickets";
 
 function getRequestOrigin(request: Request) {
   const requestUrl = new URL(request.url);
+
   const originHeader = request.headers.get("origin");
   if (originHeader) return originHeader;
 
@@ -37,18 +38,16 @@ export async function POST(request: Request) {
   }
 
   const origin = getRequestOrigin(request);
+
+  // IMPORTANT: Supabase must be allowed to redirect to this exact path (query params are fine).
   const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent(
     DEFAULT_REDIRECT_PATH
   )}`;
 
+  // IMPORTANT: Do NOT use PKCE here (this is a server route; no client code_verifier exists).
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        flowType: "pkce",
-      },
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
   const { error } = await supabase.auth.signInWithOtp({
