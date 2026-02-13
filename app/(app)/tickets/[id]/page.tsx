@@ -180,7 +180,6 @@ export default function TicketDetailPage() {
   }, [id, supabase]);
 
   useEffect(() => {
-useEffect(() => {
   if (!ticket) return;
 
   // If user came from the tickets list clicking the paperclip,
@@ -239,7 +238,7 @@ useEffect(() => {
   };
 
   loadAttachments();
-}, [notify, supabase, ticket]);
+  }, [notify, supabase, ticket]);
 
 
   const updateStatus = async (status: Ticket['status']) => {
