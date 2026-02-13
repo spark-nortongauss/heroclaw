@@ -10,16 +10,16 @@ const ALLOWED_EMAIL_REGEX = /^[a-z0-9._%+-]+@nortongauss\.com$/i;
 const DOMAIN_RESTRICTION_MESSAGE = 'Only @nortongauss.com accounts are allowed.';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const normalizedEmail = email.trim().toLowerCase();
+    const email = emailInput.trim().toLowerCase();
 
-    if (!ALLOWED_EMAIL_REGEX.test(normalizedEmail)) {
+    if (!ALLOWED_EMAIL_REGEX.test(email)) {
       setMessageType('error');
       setMessage(DOMAIN_RESTRICTION_MESSAGE);
       return;
@@ -28,13 +28,13 @@ export default function LoginPage() {
     setLoading(true);
     setMessageType('');
     setMessage('Sending magic link...');
-    setEmail(normalizedEmail);
-    const emailRedirectTo = `${window.location.origin}/auth/callback`;
+    setEmailInput(email);
+    const origin = window.location.origin;
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
+      email,
       options: {
-        emailRedirectTo,
+        emailRedirectTo: `${origin}/auth/callback`,
       },
     });
 
@@ -57,7 +57,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
-            <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input type="email" placeholder="you@example.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} required />
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Sending...' : 'Send Magic Link'}
             </Button>
