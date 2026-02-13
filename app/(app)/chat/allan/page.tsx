@@ -43,7 +43,7 @@ export default function AllanChatPage() {
   const send = async (e: FormEvent) => {
     e.preventDefault();
     const { data } = await supabase.auth.getUser();
-    await supabase.from('mc_chat_messages').insert({
+    await (supabase.from('mc_chat_messages') as any).insert({
       channel: 'allan',
       sender_type: 'user',
       sender_user_id: data.user?.id ?? null,
