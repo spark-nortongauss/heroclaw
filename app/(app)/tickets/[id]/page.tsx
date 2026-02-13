@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { MessageSquare, UserPlus } from 'lucide-react';
+import { MessageSquare, Paperclip, UserPlus } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -76,6 +76,12 @@ export default function TicketDetailPage() {
       supabase.removeChannel(channel);
     };
   }, [id, supabase]);
+
+  useEffect(() => {
+    if (window.location.hash !== '#attachments') return;
+    const attachmentsSection = document.getElementById('attachments');
+    attachmentsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [ticket]);
 
   const updateStatus = async (status: Ticket['status']) => {
     await supabase.from('mc_tickets').update({ status }).eq('id', id);
@@ -188,6 +194,18 @@ export default function TicketDetailPage() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card id="attachments" className="scroll-mt-4 border-border/80 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Paperclip className="h-4 w-4" />
+                  Attachments
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-mutedForeground">Attachments for this ticket are shown here.</p>
               </CardContent>
             </Card>
 
