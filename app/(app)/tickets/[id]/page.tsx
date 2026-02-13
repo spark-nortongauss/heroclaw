@@ -18,7 +18,7 @@ type Ticket = {
   title: string;
   description: string | null;
   status: 'not_done' | 'ongoing' | 'done';
-  meta?: {
+  context?: {
     ticketKey?: string;
     ticketNo?: number | string;
     slug?: string;
@@ -153,9 +153,10 @@ export default function TicketDetailPage() {
       setCommentsError(null);
 
       try {
+        // mc_tickets stores ticket metadata in the `context` jsonb column.
         const { data: ticketData, error: ticketError } = await supabase
           .from('mc_tickets')
-          .select('id,title,description,status,meta')
+          .select('id,title,description,status,context')
           .eq('id', id)
           .maybeSingle();
 
@@ -246,17 +247,17 @@ export default function TicketDetailPage() {
     setAttachmentsError(null);
 
     try {
-      const meta = ticket.meta ?? {};
-      const ticketNo = meta.ticketNo ? String(meta.ticketNo) : '';
+      const context = ticket.context ?? {};
+      const ticketNo = context.ticketNo ? String(context.ticketNo) : '';
       const fallbackTicketKey = `MC-${ticket.id.slice(0, 6).toUpperCase()}`;
       const ticketKey =
-        typeof meta.ticketKey === 'string' && meta.ticketKey.trim().length > 0
-          ? meta.ticketKey
+        typeof context.ticketKey === 'string' && context.ticketKey.trim().length > 0
+          ? context.ticketKey
           : fallbackTicketKey;
 
       const slugCandidate =
-        typeof meta.slug === 'string' && meta.slug.trim().length > 0
-          ? meta.slug
+        typeof context.slug === 'string' && context.slug.trim().length > 0
+          ? context.slug
           : slugify(ticket.title);
 
       const prefixes = [

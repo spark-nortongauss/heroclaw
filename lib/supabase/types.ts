@@ -11,7 +11,7 @@ export interface Database {
           status: 'not_done' | 'ongoing' | 'done';
           owner_agent_id: string | null;
           parent_id: string | null;
-          meta: Json;
+          context: Json;
           created_at: string;
           updated_at: string;
         };
@@ -22,7 +22,7 @@ export interface Database {
           status?: 'not_done' | 'ongoing' | 'done';
           owner_agent_id?: string | null;
           parent_id?: string | null;
-          meta?: Json;
+          context?: Json;
           created_at?: string;
           updated_at?: string;
         };
