@@ -9,7 +9,6 @@ const DEFAULT_REDIRECT_PATH = "/tickets";
 function getRequestOrigin(request: Request) {
   const requestUrl = new URL(request.url);
   const originHeader = request.headers.get("origin");
-
   if (originHeader) return originHeader;
 
   const forwardedHost = request.headers.get("x-forwarded-host");
@@ -31,7 +30,10 @@ export async function POST(request: Request) {
   const email = body?.email?.trim().toLowerCase();
 
   if (!email || !ALLOWED_EMAIL_REGEX.test(email)) {
-    return NextResponse.json({ error: DOMAIN_RESTRICTION_MESSAGE }, { status: 400 });
+    return NextResponse.json(
+      { error: DOMAIN_RESTRICTION_MESSAGE },
+      { status: 400 }
+    );
   }
 
   const origin = getRequestOrigin(request);
@@ -41,7 +43,12 @@ export async function POST(request: Request) {
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        flowType: "pkce",
+      },
+    }
   );
 
   const { error } = await supabase.auth.signInWithOtp({
