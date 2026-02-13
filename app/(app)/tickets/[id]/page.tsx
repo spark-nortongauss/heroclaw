@@ -129,9 +129,11 @@ const listWithOneLevelDepth = async (supabase: ReturnType<typeof createClient>, 
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const { notify } = useToast();
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState('');
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
@@ -144,24 +146,50 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     const load = async () => {
-      const ticketRes = await supabase.from('mc_tickets').select('id,title,description,status,meta').eq('id', id).single();
-      const commentsRes = await supabase
-        .from('mc_ticket_comments')
-        .select('id, body, created_at, author_agent_id, note_type')
-        .eq('ticket_id', id)
-        .order('created_at');
-      if (!ticketRes.error) setTicket(ticketRes.data);
-      if (!commentsRes.error) {
-        const loadedComments = commentsRes.data ?? [];
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { data: ticketData, error: ticketError } = await supabase
+          .from('mc_tickets')
+          .select('id,title,description,status,meta')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (ticketError) throw ticketError;
+        setTicket(ticketData ?? null);
+
+        const { data: commentsData, error: commentsError } = await supabase
+          .from('mc_ticket_comments')
+          .select('id, body, created_at, author_agent_id, note_type')
+          .eq('ticket_id', id)
+          .order('created_at');
+
+        if (commentsError) throw commentsError;
+
+        const loadedComments = commentsData ?? [];
         setComments(loadedComments);
 
         const uniqueAuthorIds = [...new Set(loadedComments.map((comment) => comment.author_agent_id).filter(Boolean))];
         if (uniqueAuthorIds.length > 0) {
-          const agentsRes = await supabase.from('mc_agents').select('id, name').in('id', uniqueAuthorIds);
-          if (!agentsRes.error && agentsRes.data) {
-            setAgentNames(Object.fromEntries(agentsRes.data.map((agent) => [agent.id, agent.name ?? agent.id])));
+          const { data: agentsData, error: agentsError } = await supabase.from('mc_agents').select('id, name').in('id', uniqueAuthorIds);
+
+          if (agentsError) throw agentsError;
+          if (agentsData) {
+            setAgentNames(Object.fromEntries(agentsData.map((agent) => [agent.id, agent.name ?? agent.id])));
           }
+        } else {
+          setAgentNames({});
         }
+      } catch (loadError) {
+        const message = loadError instanceof Error ? loadError.message : 'Failed to load ticket details.';
+        console.error('Failed to load ticket detail page data', loadError);
+        setError(message);
+        setTicket(null);
+        setComments([]);
+        setAgentNames({});
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -297,7 +325,35 @@ export default function TicketDetailPage() {
   const issueKey = useMemo(() => `MC-${id.slice(0, 6).toUpperCase()}`, [id]);
   const priority = ticket?.status === 'ongoing' ? 'high' : ticket?.status === 'done' ? 'low' : 'medium';
 
-  if (!ticket) return <p className="text-body">Loading ticket...</p>;
+  if (loading) {
+    return <p className="text-body">Loading ticket...</p>;
+  }
+
+  if (error) {
+    return (
+      <Card className="border-destructive/30 bg-destructive/5 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg text-destructive">Unable to load ticket</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-destructive">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!ticket) {
+    return (
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg">Ticket not found</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-mutedForeground">No ticket was found for id: {id}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="page-transition space-y-4">
