@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { MessageSquare, UserPlus } from 'lucide-react';
+import { MessageSquare, Paperclip, UserPlus } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -180,51 +180,67 @@ export default function TicketDetailPage() {
   }, [id, supabase]);
 
   useEffect(() => {
-    if (!ticket) return;
+useEffect(() => {
+  if (!ticket) return;
 
-    const loadAttachments = async () => {
-      setAttachmentsLoading(true);
+  // If user came from the tickets list clicking the paperclip,
+  // they land here with #attachments and we auto-scroll.
+  if (typeof window !== 'undefined' && window.location.hash === '#attachments') {
+    const attachmentsSection = document.getElementById('attachments');
+    attachmentsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
-      try {
-        const meta = ticket.meta ?? {};
-        const ticketNo = meta.ticketNo ? String(meta.ticketNo) : '';
-        const fallbackTicketKey = `MC-${ticket.id.slice(0, 6).toUpperCase()}`;
-        const ticketKey = typeof meta.ticketKey === 'string' && meta.ticketKey.trim().length > 0 ? meta.ticketKey : fallbackTicketKey;
-        const slugCandidate = typeof meta.slug === 'string' && meta.slug.trim().length > 0 ? meta.slug : slugify(ticket.title);
+  const loadAttachments = async () => {
+    setAttachmentsLoading(true);
 
-        const prefixes = [
-          `artifacts/${ticketKey}`,
-          `artifacts/${ticketKey}-${slugCandidate}`,
-          ticketNo ? `artifacts/TICKET-${ticketNo}-${slugCandidate}` : null,
-          `artifacts/${ticket.id}`
-        ].filter((prefix): prefix is string => Boolean(prefix));
+    try {
+      const meta = ticket.meta ?? {};
+      const ticketNo = meta.ticketNo ? String(meta.ticketNo) : '';
+      const fallbackTicketKey = `MC-${ticket.id.slice(0, 6).toUpperCase()}`;
+      const ticketKey =
+        typeof meta.ticketKey === 'string' && meta.ticketKey.trim().length > 0
+          ? meta.ticketKey
+          : fallbackTicketKey;
 
-        let matchedPrefix: string | null = null;
-        let matchedFiles: Attachment[] = [];
+      const slugCandidate =
+        typeof meta.slug === 'string' && meta.slug.trim().length > 0
+          ? meta.slug
+          : slugify(ticket.title);
 
-        for (const prefix of prefixes) {
-          const files = await listWithOneLevelDepth(supabase, prefix);
-          if (files.length > 0) {
-            matchedPrefix = prefix;
-            matchedFiles = files;
-            break;
-          }
+      const prefixes = [
+        `artifacts/${ticketKey}`,
+        `artifacts/${ticketKey}-${slugCandidate}`,
+        ticketNo ? `artifacts/TICKET-${ticketNo}-${slugCandidate}` : null,
+        `artifacts/${ticket.id}`,
+      ].filter((prefix): prefix is string => Boolean(prefix));
+
+      let matchedPrefix: string | null = null;
+      let matchedFiles: Attachment[] = [];
+
+      for (const prefix of prefixes) {
+        const files = await listWithOneLevelDepth(supabase, prefix);
+        if (files.length > 0) {
+          matchedPrefix = prefix;
+          matchedFiles = files;
+          break;
         }
-
-        setAttachmentsPrefix(matchedPrefix);
-        setAttachments(matchedFiles);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load attachments.';
-        notify(message, 'error');
-        setAttachmentsPrefix(null);
-        setAttachments([]);
-      } finally {
-        setAttachmentsLoading(false);
       }
-    };
 
-    loadAttachments();
-  }, [notify, supabase, ticket]);
+      setAttachmentsPrefix(matchedPrefix);
+      setAttachments(matchedFiles);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load attachments.';
+      notify(message, 'error');
+      setAttachmentsPrefix(null);
+      setAttachments([]);
+    } finally {
+      setAttachmentsLoading(false);
+    }
+  };
+
+  loadAttachments();
+}, [notify, supabase, ticket]);
+
 
   const updateStatus = async (status: Ticket['status']) => {
     await supabase.from('mc_tickets').update({ status }).eq('id', id);
@@ -378,6 +394,18 @@ export default function TicketDetailPage() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card id="attachments" className="scroll-mt-4 border-border/80 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Paperclip className="h-4 w-4" />
+                  Attachments
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-mutedForeground">Attachments for this ticket are shown here.</p>
               </CardContent>
             </Card>
 

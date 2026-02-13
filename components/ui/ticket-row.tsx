@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { Paperclip } from 'lucide-react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PriorityBadge } from '@/components/ui/priority-badge';
@@ -27,7 +28,23 @@ function initials(value: string) {
     .toUpperCase();
 }
 
-export function TicketRow({ ticket, selected, onSelect }: { ticket: TicketRowItem; selected?: boolean; onSelect?: (id: string) => void }) {
+export function TicketRow({
+  ticket,
+  selected,
+  onSelect,
+  attachmentCount,
+  attachmentLoading,
+  onAttachmentHover,
+  onAttachmentClick
+}: {
+  ticket: TicketRowItem;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
+  attachmentCount?: number;
+  attachmentLoading?: boolean;
+  onAttachmentHover?: (id: string) => void;
+  onAttachmentClick?: (id: string) => void;
+}) {
   const router = useRouter();
 
   const openTicket = () => {
@@ -74,6 +91,22 @@ export function TicketRow({ ticket, selected, onSelect }: { ticket: TicketRowIte
       </TableCell>
       <TableCell className="py-2 text-xs text-mutedForeground">
         {ticket.updatedLabel}
+      </TableCell>
+      <TableCell className="py-2 text-xs text-mutedForeground">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[#42526E] hover:bg-[#DFE1E6] hover:text-[#172B4D]"
+          onMouseEnter={() => onAttachmentHover?.(ticket.id)}
+          onFocus={() => onAttachmentHover?.(ticket.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onAttachmentClick?.(ticket.id);
+          }}
+          aria-label={`Open attachments for ${ticket.issueKey}`}
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          <span>{attachmentLoading ? '…' : attachmentCount ?? '—'}</span>
+        </button>
       </TableCell>
       <TableCell className="py-2 text-xs text-mutedForeground">
         {ticket.reporter ?? '-'}

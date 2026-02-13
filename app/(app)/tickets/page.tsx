@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,12 +40,36 @@ const choosePriority = (status: string): TicketRowItem['priority'] => {
 };
 
 export default function TicketsPage() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [assignee, setAssignee] = useState('all');
   const [priority, setPriority] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const attachmentCountCache = useRef<Map<string, number>>(new Map());
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
+  const [loadingAttachmentIds, setLoadingAttachmentIds] = useState<Record<string, boolean>>({});
   const { data = [], isLoading } = useQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
+
+  const loadAttachmentCount = async (ticketId: string) => {
+    if (attachmentCountCache.current.has(ticketId) || loadingAttachmentIds[ticketId]) return;
+
+    setLoadingAttachmentIds((prev) => ({ ...prev, [ticketId]: true }));
+    const supabase = createClient();
+    const { data: files, error } = await supabase.storage.from('ticket-attachments').list(`tickets/${ticketId}`, {
+      limit: 1000,
+      sortBy: { column: 'name', order: 'asc' }
+    });
+
+    const count = error ? 0 : (files ?? []).filter((file) => file.name && !file.name.startsWith('.emptyFolderPlaceholder')).length;
+    attachmentCountCache.current.set(ticketId, count);
+    setAttachmentCounts((prev) => ({ ...prev, [ticketId]: count }));
+    setLoadingAttachmentIds((prev) => {
+      const next = { ...prev };
+      delete next[ticketId];
+      return next;
+    });
+  };
 
   const ticketRows = useMemo<TicketRowItem[]>(() => {
     return data.map((ticket, index) => ({
@@ -134,7 +159,19 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      <TicketTable tickets={filtered} loading={isLoading} selectedId={selectedId} onSelect={setSelectedId} />
+      <TicketTable
+        tickets={filtered}
+        loading={isLoading}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        attachmentCounts={attachmentCounts}
+        loadingAttachmentIds={loadingAttachmentIds}
+        onAttachmentHover={loadAttachmentCount}
+        onAttachmentClick={(id) => {
+          setSelectedId(id);
+          router.push(`/tickets/${id}#attachments`);
+        }}
+      />
     </div>
   );
 }
