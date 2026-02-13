@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
+const ALLOWED_EMAIL_REGEX = /^[a-z0-9._%+-]+@nortongauss\.com$/i;
+const DOMAIN_RESTRICTION_MESSAGE = 'Only @nortongauss.com accounts are allowed.';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -14,13 +17,22 @@ export default function LoginPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!ALLOWED_EMAIL_REGEX.test(normalizedEmail)) {
+      setMessageType('error');
+      setMessage(DOMAIN_RESTRICTION_MESSAGE);
+      return;
+    }
+
     setLoading(true);
     setMessageType('');
     setMessage('Sending magic link...');
+    setEmail(normalizedEmail);
     const origin = window.location.origin;
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: normalizedEmail,
       options: {
         emailRedirectTo: `${origin}/auth/callback`
       }
