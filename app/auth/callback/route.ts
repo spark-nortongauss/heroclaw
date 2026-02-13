@@ -6,8 +6,19 @@ import type { Database } from "@/lib/supabase/types";
 const DEFAULT_REDIRECT_PATH = "/tickets";
 
 function getSafeNextPath(nextPath: string | null) {
-  if (!nextPath || !nextPath.startsWith("/")) return DEFAULT_REDIRECT_PATH;
-  return nextPath;
+  if (!nextPath) return DEFAULT_REDIRECT_PATH;
+
+  // handle double-encoded next like "%2Ftickets"
+  try {
+    const decoded = decodeURIComponent(nextPath);
+    if (decoded.startsWith("/")) return decoded;
+  } catch {
+    // ignore decode errors
+  }
+
+  if (nextPath.startsWith("/")) return nextPath;
+
+  return DEFAULT_REDIRECT_PATH;
 }
 
 export async function GET(request: NextRequest) {
@@ -21,7 +32,7 @@ export async function GET(request: NextRequest) {
   const redirectTo = new URL(nextPath, url.origin);
   const loginUrl = new URL("/login?error=auth_callback", url.origin);
 
-  // This response is what will receive the auth cookies (IMPORTANT)
+  // Create the redirect response NOW so cookies can be attached to it
   const response = NextResponse.redirect(redirectTo);
 
   const supabase = createServerClient<Database>(
@@ -41,28 +52,34 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  // Most common flow for magic links in modern Supabase Auth:
-  // exchange the `code` for a session (sets cookies on `response`)
+  // 1) PKCE flow (only if code exists)
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return response;
-
-    // failed exchange -> go to login
     return NextResponse.redirect(loginUrl);
   }
 
-  // Fallback for older / alternative flows where Supabase sends token_hash + type
+  // 2) Magic link implicit flow (token_hash + type)
   if (tokenHash && type) {
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       type,
       token_hash: tokenHash,
     });
 
-    if (!error) return response;
+    if (error) return NextResponse.redirect(loginUrl);
 
-    return NextResponse.redirect(loginUrl);
+    // IMPORTANT: ensure cookies are written by setting the session explicitly
+    if (data?.session) {
+      const { error: setErr } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+      if (setErr) return NextResponse.redirect(loginUrl);
+    }
+
+    return response;
   }
 
-  // If neither param exists, it's not a valid callback
+  // Neither code nor token_hash => invalid callback
   return NextResponse.redirect(loginUrl);
 }
