@@ -15,11 +15,12 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage('Sending magic link...');
+    const origin = window.location.origin;
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`
+        emailRedirectTo: `${origin}/auth/callback`
       }
     });
 
