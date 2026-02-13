@@ -3,9 +3,67 @@
 @tailwind utilities;
 
 :root {
+  --background: 0 0% 100%;
+  --foreground: 143 31% 20%;
+  --primary: 71 100% 60%;
+  --primary-foreground: 143 31% 20%;
+  --brand-dark: 143 31% 20%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 50%;
+  --card: 0 0% 100%;
+  --card-foreground: 143 31% 20%;
+  --border: 0 0% 85%;
+  --input: 0 0% 88%;
+  --ring: 71 100% 60%;
+  --destructive: 0 73% 52%;
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-sm: 0.5rem;
   color-scheme: light;
 }
 
+* {
+  @apply border-border;
+}
+
 body {
-  @apply bg-background text-foreground;
+  @apply bg-background text-foreground antialiased;
+}
+
+h1,
+.h1 {
+  @apply text-3xl font-semibold tracking-tight md:text-4xl;
+}
+
+h2,
+.h2 {
+  @apply text-2xl font-semibold tracking-tight;
+}
+
+.text-body {
+  @apply text-sm text-mutedForeground md:text-base;
+}
+
+.text-small {
+  @apply text-xs text-mutedForeground;
+}
+
+.neon-grid {
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(217, 255, 53, 0.13), transparent 35%),
+    linear-gradient(rgba(35, 66, 52, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(35, 66, 52, 0.05) 1px, transparent 1px);
+  background-size: auto, 24px 24px, 24px 24px;
+  background-position: center, center, center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

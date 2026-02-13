@@ -28,14 +28,11 @@ export default function LoginPage() {
     setLoading(true);
     setMessageType('');
     setMessage('Sending magic link...');
-    setEmailInput(email);
-    const origin = window.location.origin;
+
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
     });
 
     if (error) {
@@ -45,27 +42,24 @@ export default function LoginPage() {
       setMessageType('success');
       setMessage('Check your email for the login link or OTP.');
     }
+
     setLoading(false);
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="neon-grid flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Mission Control UI</CardTitle>
+          <CardTitle>Norton-Gauss Mission Control</CardTitle>
           <CardDescription>Sign in with your email to manage Clawdbot agents.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
-            <Input type="email" placeholder="you@example.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} required />
+            <Input type="email" placeholder="you@nortongauss.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} required />
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Sending...' : 'Send Magic Link'}
             </Button>
-            {message && (
-              <p className={`text-sm ${messageType === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                {message}
-              </p>
-            )}
+            {message && <p className={`text-sm ${messageType === 'error' ? 'text-destructive' : 'text-mutedForeground'}`}>{message}</p>}
           </form>
         </CardContent>
       </Card>
