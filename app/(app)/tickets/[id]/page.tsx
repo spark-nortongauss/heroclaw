@@ -18,6 +18,12 @@ type Ticket = {
   title: string;
   description: string | null;
   status: 'not_done' | 'ongoing' | 'done';
+  meta?: {
+    ticketKey?: string;
+    ticketNo?: number | string;
+    slug?: string;
+    [key: string]: unknown;
+  };
 };
 
 type Comment = {
@@ -26,6 +32,99 @@ type Comment = {
   created_at: string;
   author_agent_id: string;
   note_type: string;
+};
+
+type StorageItem = {
+  name: string;
+  id?: string;
+  updated_at?: string;
+  metadata?: {
+    size?: number;
+  };
+};
+
+type Attachment = {
+  path: string;
+  name: string;
+  size: number | null;
+  updatedAt: string | null;
+};
+
+const ATTACHMENT_BUCKET = 'mc-artifacts';
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const formatBytes = (value: number | null) => {
+  if (value === null) return 'Unknown size';
+  if (value < 1024) return `${value} B`;
+
+  const units = ['KB', 'MB', 'GB'];
+  let size = value / 1024;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const formatUpdatedAt = (value: string | null) => (value ? new Date(value).toLocaleString() : 'Unknown date');
+
+const listWithOneLevelDepth = async (supabase: ReturnType<typeof createClient>, prefix: string) => {
+  const normalizedPrefix = prefix.replace(/^\/+/, '').replace(/\/$/, '');
+  const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).list(normalizedPrefix, {
+    limit: 100,
+    sortBy: { column: 'updated_at', order: 'desc' }
+  });
+
+  if (error) throw error;
+
+  const rootItems = (data ?? []) as StorageItem[];
+  const files: Attachment[] = [];
+  const folders: string[] = [];
+
+  rootItems.forEach((item) => {
+    if (!item.id) {
+      folders.push(item.name);
+      return;
+    }
+
+    files.push({
+      path: `${normalizedPrefix}/${item.name}`,
+      name: item.name,
+      size: item.metadata?.size ?? null,
+      updatedAt: item.updated_at ?? null
+    });
+  });
+
+  const nestedFiles = await Promise.all(
+    folders.map(async (folderName) => {
+      const nestedPrefix = `${normalizedPrefix}/${folderName}`;
+      const { data: nestedData, error: nestedError } = await supabase.storage.from(ATTACHMENT_BUCKET).list(nestedPrefix, {
+        limit: 100,
+        sortBy: { column: 'updated_at', order: 'desc' }
+      });
+
+      if (nestedError) throw nestedError;
+
+      return ((nestedData ?? []) as StorageItem[])
+        .filter((item) => Boolean(item.id))
+        .map((item) => ({
+          path: `${nestedPrefix}/${item.name}`,
+          name: item.name,
+          size: item.metadata?.size ?? null,
+          updatedAt: item.updated_at ?? null
+        }));
+    })
+  );
+
+  return [...files, ...nestedFiles.flat()];
 };
 
 export default function TicketDetailPage() {
@@ -38,11 +137,14 @@ export default function TicketDetailPage() {
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [pulseStatus, setPulseStatus] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachmentsPrefix, setAttachmentsPrefix] = useState<string | null>(null);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const humanAgentId = process.env.NEXT_PUBLIC_HUMAN_AGENT_ID;
 
   useEffect(() => {
     const load = async () => {
-      const ticketRes = await supabase.from('mc_tickets').select('id,title,description,status').eq('id', id).single();
+      const ticketRes = await supabase.from('mc_tickets').select('id,title,description,status,meta').eq('id', id).single();
       const commentsRes = await supabase
         .from('mc_ticket_comments')
         .select('id, body, created_at, author_agent_id, note_type')
@@ -76,6 +178,53 @@ export default function TicketDetailPage() {
       supabase.removeChannel(channel);
     };
   }, [id, supabase]);
+
+  useEffect(() => {
+    if (!ticket) return;
+
+    const loadAttachments = async () => {
+      setAttachmentsLoading(true);
+
+      try {
+        const meta = ticket.meta ?? {};
+        const ticketNo = meta.ticketNo ? String(meta.ticketNo) : '';
+        const fallbackTicketKey = `MC-${ticket.id.slice(0, 6).toUpperCase()}`;
+        const ticketKey = typeof meta.ticketKey === 'string' && meta.ticketKey.trim().length > 0 ? meta.ticketKey : fallbackTicketKey;
+        const slugCandidate = typeof meta.slug === 'string' && meta.slug.trim().length > 0 ? meta.slug : slugify(ticket.title);
+
+        const prefixes = [
+          `artifacts/${ticketKey}`,
+          `artifacts/${ticketKey}-${slugCandidate}`,
+          ticketNo ? `artifacts/TICKET-${ticketNo}-${slugCandidate}` : null,
+          `artifacts/${ticket.id}`
+        ].filter((prefix): prefix is string => Boolean(prefix));
+
+        let matchedPrefix: string | null = null;
+        let matchedFiles: Attachment[] = [];
+
+        for (const prefix of prefixes) {
+          const files = await listWithOneLevelDepth(supabase, prefix);
+          if (files.length > 0) {
+            matchedPrefix = prefix;
+            matchedFiles = files;
+            break;
+          }
+        }
+
+        setAttachmentsPrefix(matchedPrefix);
+        setAttachments(matchedFiles);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load attachments.';
+        notify(message, 'error');
+        setAttachmentsPrefix(null);
+        setAttachments([]);
+      } finally {
+        setAttachmentsLoading(false);
+      }
+    };
+
+    loadAttachments();
+  }, [notify, supabase, ticket]);
 
   const updateStatus = async (status: Ticket['status']) => {
     await supabase.from('mc_tickets').update({ status }).eq('id', id);
@@ -117,6 +266,17 @@ export default function TicketDetailPage() {
     }
 
     setSaving(false);
+  };
+
+  const downloadAttachment = async (path: string) => {
+    const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(path, 60);
+
+    if (error || !data?.signedUrl) {
+      notify(error?.message ?? 'Unable to create download link.', 'error');
+      return;
+    }
+
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const issueKey = useMemo(() => `MC-${id.slice(0, 6).toUpperCase()}`, [id]);
@@ -169,6 +329,36 @@ export default function TicketDetailPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-[#172B4D]">{ticket.description ?? 'No description provided.'}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Attachments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {attachmentsLoading ? (
+                  <p className="text-sm text-mutedForeground">Loading attachments...</p>
+                ) : attachments.length === 0 ? (
+                  <p className="text-sm text-mutedForeground">No attachments found for this ticket.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {attachmentsPrefix && <p className="text-xs text-[#6B778C]">Source: {attachmentsPrefix}/</p>}
+                    {attachments.map((attachment) => (
+                      <div key={attachment.path} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/80 p-3">
+                        <div>
+                          <p className="text-sm font-medium text-[#172B4D]">{attachment.name}</p>
+                          <p className="text-xs text-[#6B778C]">
+                            {formatBytes(attachment.size)} · Updated {formatUpdatedAt(attachment.updatedAt)}
+                          </p>
+                        </div>
+                        <Button variant="secondary" size="sm" onClick={() => downloadAttachment(attachment.path)}>
+                          Download
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
