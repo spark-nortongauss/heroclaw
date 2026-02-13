@@ -9,11 +9,13 @@ import { Input } from '@/components/ui/input';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setMessageType('');
     setMessage('Sending magic link...');
     const origin = window.location.origin;
     const supabase = createClient();
@@ -25,8 +27,10 @@ export default function LoginPage() {
     });
 
     if (error) {
+      setMessageType('error');
       setMessage(error.message);
     } else {
+      setMessageType('success');
       setMessage('Check your email for the login link or OTP.');
     }
     setLoading(false);
@@ -45,7 +49,11 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Sending...' : 'Send Magic Link'}
             </Button>
-            {message && <p className="text-sm text-muted-foreground">{message}</p>}
+            {message && (
+              <p className={`text-sm ${messageType === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {message}
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>
