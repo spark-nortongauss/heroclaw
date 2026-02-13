@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { Database } from '@/lib/supabase/types';
 
-const PUBLIC_ROUTES = ['/login', '/auth/callback'];
+const PUBLIC_ROUTES = ['/login', '/auth/callback', '/api/auth/magic-link'];
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
