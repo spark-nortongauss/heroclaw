@@ -1,15 +1,14 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table';
+import { TicketTable } from '@/components/ui/ticket-table';
+import type { TicketRowItem } from '@/components/ui/ticket-row';
 
 async function fetchTickets() {
   const supabase = createClient();
@@ -21,87 +20,121 @@ async function fetchTickets() {
   return data ?? [];
 }
 
+const relativeTime = (dateValue: string) => {
+  const timeMs = new Date(dateValue).getTime();
+  const diffMinutes = Math.round((timeMs - Date.now()) / 60000);
+  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+  if (Math.abs(diffMinutes) < 60) return formatter.format(diffMinutes, 'minute');
+  const diffHours = Math.round(diffMinutes / 60);
+  if (Math.abs(diffHours) < 24) return formatter.format(diffHours, 'hour');
+  const diffDays = Math.round(diffHours / 24);
+  return formatter.format(diffDays, 'day');
+};
+
+const choosePriority = (status: string): TicketRowItem['priority'] => {
+  if (status === 'ongoing') return 'high';
+  if (status === 'not_done') return 'medium';
+  return 'low';
+};
+
 export default function TicketsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [assignee, setAssignee] = useState('all');
+  const [priority, setPriority] = useState('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data = [], isLoading } = useQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
+
+  const ticketRows = useMemo<TicketRowItem[]>(() => {
+    return data.map((ticket, index) => ({
+      id: ticket.id,
+      issueKey: `MC-${String(index + 101)}`,
+      summary: ticket.title,
+      status: ticket.status,
+      assignee: ticket.owner_agent_id || 'Unassigned',
+      reporter: ticket.owner_agent_id || 'System',
+      parent: null,
+      updatedLabel: relativeTime(ticket.updated_at),
+      priority: choosePriority(ticket.status)
+    }));
+  }, [data]);
 
   const filtered = useMemo(
     () =>
-      data.filter((ticket) => {
-        const matchesSearch = ticket.title.toLowerCase().includes(search.toLowerCase());
+      ticketRows.filter((ticket) => {
+        const matchesSearch = ticket.summary.toLowerCase().includes(search.toLowerCase()) || ticket.issueKey.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = status === 'all' || ticket.status === status;
-        return matchesSearch && matchesStatus;
+        const matchesAssignee = assignee === 'all' || ticket.assignee === assignee;
+        const matchesPriority = priority === 'all' || ticket.priority === priority;
+        return matchesSearch && matchesStatus && matchesAssignee && matchesPriority;
       }),
-    [data, search, status]
+    [assignee, priority, search, status, ticketRows]
   );
 
+  const assignees = useMemo(() => ['all', ...new Set(ticketRows.map((ticket) => ticket.assignee))], [ticketRows]);
+
   return (
-    <div className="space-y-4">
+    <div className="page-transition space-y-4">
       <div>
         <h1 className="h1 font-[var(--font-heading)]">Tickets</h1>
         <p className="text-body">Track tickets and monitor status transitions.</p>
       </div>
 
-      <div className="flex flex-col gap-2 md:flex-row">
-        <Input placeholder="Search tickets..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="md:w-52">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="not_done">Not done</SelectItem>
-            <SelectItem value="ongoing">Ongoing</SelectItem>
-            <SelectItem value="done">Done</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="rounded-xl border border-border bg-white p-3 shadow-sm">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <Input
+            placeholder="Search issues"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-xl"
+            aria-label="Search issues"
+          />
+          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-3">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger aria-label="Filter by status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="not_done">To Do</SelectItem>
+                <SelectItem value="ongoing">In Progress</SelectItem>
+                <SelectItem value="done">Done</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={assignee} onValueChange={setAssignee}>
+              <SelectTrigger aria-label="Filter by assignee">
+                <SelectValue placeholder="Assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                {assignees.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item === 'all' ? 'All assignees' : item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger aria-label="Filter by priority">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All priorities</SelectItem>
+                <SelectItem value="highest">Highest</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]">
+            <Plus className="mr-1 h-4 w-4" />
+            Create Ticket
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHead>
-              <tr>
-                <TableHeaderCell>Title</TableHeaderCell>
-                <TableHeaderCell>Status</TableHeaderCell>
-                <TableHeaderCell>Owner Agent</TableHeaderCell>
-                <TableHeaderCell>Updated</TableHeaderCell>
-              </tr>
-            </TableHead>
-            <TableBody>
-              {isLoading && (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Skeleton className="h-10 w-full" />
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoading && filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-mutedForeground">
-                    No tickets found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtered.map((ticket) => (
-                <TableRow key={ticket.id} className="cursor-pointer hover:bg-muted/50">
-                  <TableCell>
-                    <Link href={`/tickets/${ticket.id}`} className="font-medium underline-offset-4 hover:underline">
-                      {ticket.title}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={ticket.status}>{ticket.status}</Badge>
-                  </TableCell>
-                  <TableCell>{ticket.owner_agent_id ?? '-'}</TableCell>
-                  <TableCell>{new Date(ticket.updated_at).toLocaleString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <TicketTable tickets={filtered} loading={isLoading} selectedId={selectedId} onSelect={setSelectedId} />
     </div>
   );
 }
