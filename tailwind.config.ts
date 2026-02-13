@@ -2,39 +2,32 @@ import type { Config } from 'tailwindcss';
 
 const config: Config = {
   darkMode: ['class'],
-  content: [
-    './app/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './lib/**/*.{ts,tsx}'
-  ],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        border: 'hsl(214.3 31.8% 91.4%)',
-        input: 'hsl(214.3 31.8% 91.4%)',
-        ring: 'hsl(221.2 83.2% 53.3%)',
-        background: 'hsl(0 0% 100%)',
-        foreground: 'hsl(222.2 84% 4.9%)',
-        primary: {
-          DEFAULT: 'hsl(221.2 83.2% 53.3%)',
-          foreground: 'hsl(210 40% 98%)'
-        },
-        secondary: {
-          DEFAULT: 'hsl(210 40% 96.1%)',
-          foreground: 'hsl(222.2 47.4% 11.2%)'
-        },
-        muted: {
-          DEFAULT: 'hsl(210 40% 96.1%)',
-          foreground: 'hsl(215.4 16.3% 46.9%)'
-        },
-        accent: {
-          DEFAULT: 'hsl(210 40% 96.1%)',
-          foreground: 'hsl(222.2 47.4% 11.2%)'
-        },
-        card: {
-          DEFAULT: 'hsl(0 0% 100%)',
-          foreground: 'hsl(222.2 84% 4.9%)'
-        }
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: 'hsl(var(--primary))',
+        primaryForeground: 'hsl(var(--primary-foreground))',
+        brandDark: 'hsl(var(--brand-dark))',
+        muted: 'hsl(var(--muted))',
+        mutedForeground: 'hsl(var(--muted-foreground))',
+        card: 'hsl(var(--card))',
+        cardForeground: 'hsl(var(--card-foreground))',
+        destructive: 'hsl(var(--destructive))'
+      },
+      borderRadius: {
+        lg: 'var(--radius-lg)',
+        md: 'var(--radius-md)',
+        sm: 'var(--radius-sm)'
+      },
+      boxShadow: {
+        soft: '0 10px 30px rgba(35, 66, 52, 0.08)',
+        glow: '0 0 30px rgba(217, 255, 53, 0.25)'
       }
     }
   },

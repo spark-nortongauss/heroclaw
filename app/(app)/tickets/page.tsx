@@ -6,6 +6,10 @@ import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table';
 
 async function fetchTickets() {
   const supabase = createClient();
@@ -34,10 +38,15 @@ export default function TicketsPage() {
 
   return (
     <div className="space-y-4">
+      <div>
+        <h1 className="h1 font-[var(--font-heading)]">Tickets</h1>
+        <p className="text-body">Track tickets and monitor status transitions.</p>
+      </div>
+
       <div className="flex flex-col gap-2 md:flex-row">
         <Input placeholder="Search tickets..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="md:w-48">
+          <SelectTrigger className="md:w-52">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -48,39 +57,51 @@ export default function TicketsPage() {
           </SelectContent>
         </Select>
       </div>
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted text-left">
-            <tr>
-              <th className="px-3 py-2">Title</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Owner Agent</th>
-              <th className="px-3 py-2">Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
+
+      <Card>
+        <CardContent className="overflow-x-auto p-0">
+          <Table>
+            <TableHead>
               <tr>
-                <td className="px-3 py-4" colSpan={4}>
-                  Loading...
-                </td>
+                <TableHeaderCell>Title</TableHeaderCell>
+                <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell>Owner Agent</TableHeaderCell>
+                <TableHeaderCell>Updated</TableHeaderCell>
               </tr>
-            )}
-            {filtered.map((ticket) => (
-              <tr key={ticket.id} className="border-t hover:bg-muted/30">
-                <td className="px-3 py-2">
-                  <Link href={`/tickets/${ticket.id}`} className="text-primary underline-offset-4 hover:underline">
-                    {ticket.title}
-                  </Link>
-                </td>
-                <td className="px-3 py-2">{ticket.status}</td>
-                <td className="px-3 py-2">{ticket.owner_agent_id ?? '-'}</td>
-                <td className="px-3 py-2">{new Date(ticket.updated_at).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </TableHead>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <Skeleton className="h-10 w-full" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-mutedForeground">
+                    No tickets found.
+                  </TableCell>
+                </TableRow>
+              )}
+              {filtered.map((ticket) => (
+                <TableRow key={ticket.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableCell>
+                    <Link href={`/tickets/${ticket.id}`} className="font-medium underline-offset-4 hover:underline">
+                      {ticket.title}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={ticket.status}>{ticket.status}</Badge>
+                  </TableCell>
+                  <TableCell>{ticket.owner_agent_id ?? '-'}</TableCell>
+                  <TableCell>{new Date(ticket.updated_at).toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
