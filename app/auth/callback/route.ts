@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import type { EmailOtpType } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 
 const DEFAULT_REDIRECT_PATH = '/tickets';
 
+function getSafeNextPath(nextPath: string | null) {
+  if (!nextPath || !nextPath.startsWith('/')) {
+    return DEFAULT_REDIRECT_PATH;
+  }
+
+  return nextPath;
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
-  const nextPath = request.nextUrl.searchParams.get('next') || DEFAULT_REDIRECT_PATH;
-  const redirectTo = new URL(nextPath.startsWith('/') ? nextPath : DEFAULT_REDIRECT_PATH, request.url);
+  const tokenHash = request.nextUrl.searchParams.get('token_hash');
+  const type = request.nextUrl.searchParams.get('type') as EmailOtpType | null;
+  const nextPath = getSafeNextPath(request.nextUrl.searchParams.get('next'));
+  const redirectTo = new URL(nextPath, request.url);
   const loginUrl = new URL('/login?error=auth_callback', request.url);
-
-  if (!code) {
-    return NextResponse.redirect(loginUrl);
-  }
 
   const response = NextResponse.redirect(redirectTo);
 
@@ -33,11 +40,19 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    return NextResponse.redirect(loginUrl);
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      return response;
+    }
   }
 
-  return response;
+  if (tokenHash && type) {
+    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
+    if (!error) {
+      return response;
+    }
+  }
+
+  return NextResponse.redirect(loginUrl);
 }
