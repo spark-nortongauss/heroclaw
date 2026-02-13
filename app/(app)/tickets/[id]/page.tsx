@@ -135,6 +135,7 @@ export default function TicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentBody, setCommentBody] = useState('');
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -142,12 +143,14 @@ export default function TicketDetailPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentsPrefix, setAttachmentsPrefix] = useState<string | null>(null);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const humanAgentId = process.env.NEXT_PUBLIC_HUMAN_AGENT_ID;
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setCommentsError(null);
 
       try {
         const { data: ticketData, error: ticketError } = await supabase
@@ -156,8 +159,23 @@ export default function TicketDetailPage() {
           .eq('id', id)
           .maybeSingle();
 
-        if (ticketError) throw ticketError;
-        setTicket(ticketData ?? null);
+        if (ticketError) {
+          console.error('ticket fetch failed', { id, error: ticketError });
+          setError(ticketError.message);
+          setTicket(null);
+          setComments([]);
+          setAgentNames({});
+          return;
+        }
+
+        if (!ticketData) {
+          setTicket(null);
+          setComments([]);
+          setAgentNames({});
+          return;
+        }
+
+        setTicket(ticketData);
 
         const { data: commentsData, error: commentsError } = await supabase
           .from('mc_ticket_comments')
@@ -165,7 +183,13 @@ export default function TicketDetailPage() {
           .eq('ticket_id', id)
           .order('created_at');
 
-        if (commentsError) throw commentsError;
+        if (commentsError) {
+          console.error('comments fetch failed', { id, error: commentsError });
+          setCommentsError(commentsError.message);
+          setComments([]);
+          setAgentNames({});
+          return;
+        }
 
         const loadedComments = commentsData ?? [];
         setComments(loadedComments);
@@ -219,6 +243,7 @@ export default function TicketDetailPage() {
 
   const loadAttachments = async () => {
     setAttachmentsLoading(true);
+    setAttachmentsError(null);
 
     try {
       const meta = ticket.meta ?? {};
@@ -257,6 +282,8 @@ export default function TicketDetailPage() {
       setAttachments(matchedFiles);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load attachments.';
+      console.error('attachments fetch failed', { id: ticket.id, error });
+      setAttachmentsError(message);
       notify(message, 'error');
       setAttachmentsPrefix(null);
       setAttachments([]);
@@ -333,7 +360,7 @@ export default function TicketDetailPage() {
     return (
       <Card className="border-destructive/30 bg-destructive/5 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-lg text-destructive">Unable to load ticket</CardTitle>
+          <CardTitle className="text-lg text-destructive">Failed to load ticket details.</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-destructive">{error}</p>
@@ -348,11 +375,11 @@ export default function TicketDetailPage() {
         <CardHeader>
           <CardTitle className="text-lg">Ticket not found</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-mutedForeground">No ticket was found for id: {id}</p>
-        </CardContent>
-      </Card>
-    );
+          <CardContent>
+          <p className="text-sm text-mutedForeground">Ticket not found for id: {id}</p>
+          </CardContent>
+        </Card>
+      );
   }
 
   return (
@@ -410,6 +437,8 @@ export default function TicketDetailPage() {
               <CardContent>
                 {attachmentsLoading ? (
                   <p className="text-sm text-mutedForeground">Loading attachments...</p>
+                ) : attachmentsError ? (
+                  <p className="text-sm text-destructive">{attachmentsError}</p>
                 ) : attachments.length === 0 ? (
                   <p className="text-sm text-mutedForeground">No attachments found for this ticket.</p>
                 ) : (
@@ -439,7 +468,8 @@ export default function TicketDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {comments.length === 0 && <p className="text-sm text-mutedForeground">No comments yet.</p>}
+                  {commentsError && <p className="text-sm text-destructive">{commentsError}</p>}
+                  {!commentsError && comments.length === 0 && <p className="text-sm text-mutedForeground">No comments yet.</p>}
                   {comments.map((comment) => (
                     <div key={comment.id} className="rounded-md border border-border/80 bg-[#FAFBFC] p-3">
                       <p className="text-sm leading-relaxed text-[#172B4D]">{comment.body}</p>
