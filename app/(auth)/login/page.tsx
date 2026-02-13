@@ -29,12 +29,13 @@ export default function LoginPage() {
     setMessageType('');
     setMessage('Sending magic link...');
     setEmail(normalizedEmail);
+    const emailRedirectTo = `${window.location.origin}/auth/callback`;
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
-      }
+        emailRedirectTo,
+      },
     });
 
     if (error) {
