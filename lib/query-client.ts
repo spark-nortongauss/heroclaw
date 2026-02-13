@@ -26,8 +26,11 @@ export async function fetchRecentActivity() {
   if (commentsRes.error) throw commentsRes.error;
   if (requestsRes.error) throw requestsRes.error;
 
+  type RecentComment = { id: string; body: string; created_at: string };
+  type RecentRequest = { id: string; request_type: string; status: string; created_at: string };
+
   return {
-    comments: commentsRes.data ?? [],
-    requests: requestsRes.data ?? []
+    comments: (commentsRes.data as RecentComment[] | null) ?? [],
+    requests: (requestsRes.data as RecentRequest[] | null) ?? []
   };
 }
