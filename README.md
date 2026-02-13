@@ -41,6 +41,7 @@ Production-ready Next.js App Router interface for managing Clawdbot agents via S
 2. Import project in Vercel.
 3. Set all environment variables from `.env.example` in Vercel project settings.
 4. Deploy.
+5. .
 
 ## Build
 ```bash
