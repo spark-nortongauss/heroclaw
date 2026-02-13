@@ -2,18 +2,29 @@
 
 import { createClient } from '@/lib/supabase/client';
 
+type TicketStatus = 'done' | 'ongoing' | 'not_done';
+
+type TicketLike = {
+  status: TicketStatus | null;
+};
+
+export function countTicketsByStatus(data?: TicketLike[] | null) {
+  return (data ?? []).reduce(
+    (acc, ticket) => {
+      const status = (ticket.status ?? 'not_done') as TicketStatus;
+      acc[status] += 1;
+      return acc;
+    },
+    { done: 0, ongoing: 0, not_done: 0 } satisfies Record<TicketStatus, number>
+  );
+}
+
 export async function fetchTicketCounts() {
   const supabase = createClient();
   const { data, error } = await supabase.from('mc_tickets').select('status');
   if (error) throw error;
 
-  return (data ?? []).reduce(
-    (acc, ticket) => {
-      acc[ticket.status] += 1;
-      return acc;
-    },
-    { done: 0, ongoing: 0, not_done: 0 } as Record<'done' | 'ongoing' | 'not_done', number>
-  );
+  return countTicketsByStatus(data);
 }
 
 export async function fetchRecentActivity() {
