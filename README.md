@@ -8,6 +8,11 @@ Production-ready Next.js App Router interface for managing Clawdbot agents via S
 - Supabase Auth, Postgres, Realtime
 - TanStack Query
 
+## Prerequisites
+- Node.js 18+
+- npm 9+
+- A Supabase project
+
 ## Setup
 1. Create a Supabase project.
 2. Run SQL from `supabase/schema.sql` in the Supabase SQL editor.
@@ -21,11 +26,17 @@ Production-ready Next.js App Router interface for managing Clawdbot agents via S
    ```bash
    npm install
    ```
-5. Run development server:
+5. Run the development server:
    ```bash
    npm run dev
    ```
-6. Open http://localhost:3000.
+6. Open [http://localhost:3000](http://localhost:3000).
+
+## Available scripts
+- `npm run dev` — start local development server
+- `npm run build` — create production build
+- `npm run start` — start production server
+- `npm run lint` — run ESLint
 
 ## Routes
 - `/login`: Supabase email magic link / OTP login
@@ -34,14 +45,13 @@ Production-ready Next.js App Router interface for managing Clawdbot agents via S
 - `/tickets/[id]`: Ticket details, status update, realtime comments
 - `/chat/allan`: Realtime chat channel
 - `/requests/new`: Structured request form + command preview
-- `POST /api/allan/request`: stubbed gateway forwarding endpoint
+- `POST /api/allan/request`: Stubbed gateway forwarding endpoint
 
 ## Deploy to Vercel
 1. Push this repo to GitHub.
-2. Import project in Vercel.
+2. Import the project in Vercel.
 3. Set all environment variables from `.env.example` in Vercel project settings.
 4. Deploy.
-5. .
 
 ## Build
 ```bash
