@@ -40,6 +40,19 @@ const asAgent = (value: AgentRef | AgentRef[] | null | undefined): AgentRef | nu
   return Array.isArray(value) ? value[0] ?? null : value;
 };
 
+function agentLabel(agent: any) {
+  return (
+    agent?.name ??
+    agent?.display_name ??
+    agent?.full_name ??
+    agent?.agent_name ??
+    agent?.username ??
+    agent?.email ??
+    agent?.id ??
+    null
+  );
+}
+
 const formatDateTime = (value: string | null) => {
   if (!value) return '-';
 
@@ -70,8 +83,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
       updated_at,
       closed_at,
       parent_ticket_id,
-      owner:mc_agents!mc_tickets_owner_agent_id_fkey(id, name),
-      reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(id, name)
+      owner:mc_agents!mc_tickets_owner_agent_id_fkey(*),
+      reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(*)
     `
     )
     .eq('id', params.id)
@@ -114,8 +127,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
       <section className="grid gap-4 md:grid-cols-2">
         <DetailCard label="Status" value={ticket.status} />
         <DetailCard label="Priority" value={ticket.priority} />
-        <DetailCard label="Owner" value={owner?.name ?? 'Unassigned'} />
-        <DetailCard label="Reporter" value={reporter?.name ?? 'Unknown'} />
+        <DetailCard label="Owner" value={agentLabel(owner) ?? 'Unassigned'} />
+        <DetailCard label="Reporter" value={agentLabel(reporter) ?? 'Unknown'} />
         <DetailCard label="Due" value={formatDateTime(ticket.due_at)} />
         <DetailCard label="Created" value={formatDateTime(ticket.created_at)} />
         <DetailCard label="Updated" value={formatDateTime(ticket.updated_at)} />
