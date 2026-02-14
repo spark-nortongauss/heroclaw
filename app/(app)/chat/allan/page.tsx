@@ -97,7 +97,11 @@ export default function AllanChatPage() {
       return;
     }
 
-    const socket = new WebSocket(gatewayUrl);
+    const base = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL!;
+    const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN!;
+    const url = new URL(base);
+    url.searchParams.set("token", token);
+    const socket = new WebSocket(url.toString());
     socketRef.current = socket;
 
     socket.onopen = () => {
