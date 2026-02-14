@@ -68,14 +68,6 @@ function agentLabel(agent: AgentRef | null | undefined) {
   );
 }
 
-const formatDateTime = (value: string | null) => {
-  if (!value) return '-';
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
-};
-
 export default async function TicketDetailPage({ params }: PageProps) {
   const supabase = createSupabaseServerClient();
 
@@ -139,9 +131,6 @@ export default async function TicketDetailPage({ params }: PageProps) {
     (supabase as any).from('mc_agents').select('*').order('name', { ascending: true })
   ]);
 
-  const owner = asAgent(ticket.owner);
-  const reporter = asAgent(ticket.reporter);
-
   const comments = ((commentsData ?? []) as CommentRow[]).map((comment) => {
     const author = asAgent(comment.author);
 
@@ -173,54 +162,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
         ← Back to tickets
       </Link>
 
-      <header className="rounded-xl border bg-white p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Ticket #{ticket.ticket_no ?? '-'}</p>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900">{ticket.title}</h1>
-          <button
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"
-            type="button"
-          >
-            Actions
-          </button>
-        </div>
-      </header>
-
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_320px]">
-        <div className="space-y-5">
-          <section className="rounded-xl border bg-white p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Description</h2>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-800">
-              {ticket.description ?? '(No description provided)'}
-            </p>
-          </section>
-
-          <TicketDetailClient agents={agents} comments={comments} ticketId={ticket.id} />
-        </div>
-
-        <aside className="h-fit rounded-xl border bg-white p-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Details</h2>
-          <dl className="mt-3 divide-y">
-            <DetailRow label="Status" value={ticket.status} />
-            <DetailRow label="Priority" value={ticket.priority} />
-            <DetailRow label="Assignee" value={owner?.display_name ?? ticket.owner_agent_id ?? 'Unassigned'} />
-            <DetailRow label="Reporter" value={reporter?.display_name ?? ticket.reporter_agent_id ?? 'Unknown'} />
-            <DetailRow label="Due date" value={formatDateTime(ticket.due_at)} />
-            <DetailRow label="Created" value={formatDateTime(ticket.created_at)} />
-            <DetailRow label="Updated" value={formatDateTime(ticket.updated_at)} />
-            <DetailRow label="Labels" value={ticket.labels?.length ? ticket.labels.join(', ') : '-'} />
-          </dl>
-        </aside>
-      </section>
+      <TicketDetailClient agents={agents} comments={comments} ticket={ticket} />
     </main>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div className="grid grid-cols-[110px_1fr] gap-3 py-2.5">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</dt>
-      <dd className="text-sm text-gray-900">{value && value.length > 0 ? value : '-'}</dd>
-    </div>
   );
 }
