@@ -168,58 +168,59 @@ export default async function TicketDetailPage({ params }: PageProps) {
     .filter((agent): agent is { id: string; label: string; department: string | null } => Boolean(agent.label));
 
   return (
-    <main className="space-y-6 p-6">
-      <div>
-        <Link className="text-sm underline" href="/tickets">
-          ← Back to tickets
-        </Link>
-      </div>
+    <main className="space-y-5 p-4 sm:p-6">
+      <Link className="inline-flex text-xs font-medium uppercase tracking-wide text-gray-500 hover:text-gray-800" href="/tickets">
+        ← Back to tickets
+      </Link>
 
-      <section className="space-y-1">
-        <p className="text-sm text-gray-600">Ticket #{ticket.ticket_no ?? '-'}</p>
-        <h1 className="text-2xl font-semibold">{ticket.title}</h1>
-      </section>
+      <header className="rounded-xl border bg-white p-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Ticket #{ticket.ticket_no ?? '-'}</p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-gray-900">{ticket.title}</h1>
+          <button
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"
+            type="button"
+          >
+            Actions
+          </button>
+        </div>
+      </header>
 
-      <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <div className="space-y-6">
-          <section className="rounded-lg border bg-white p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Description</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_320px]">
+        <div className="space-y-5">
+          <section className="rounded-xl border bg-white p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Description</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-800">
               {ticket.description ?? '(No description provided)'}
             </p>
-            {ticket.labels?.length ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {ticket.labels.map((label) => (
-                  <span key={label} className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700">
-                    {label}
-                  </span>
-                ))}
-              </div>
-            ) : null}
           </section>
 
           <TicketDetailClient agents={agents} comments={comments} ticketId={ticket.id} />
         </div>
 
-        <aside className="space-y-3">
-          <DetailCard label="Status" value={ticket.status} />
-          <DetailCard label="Priority" value={ticket.priority} />
-          <DetailCard label="Assignee" value={owner?.display_name ?? ticket.owner_agent_id ?? 'Unassigned'} />
-          <DetailCard label="Reporter" value={reporter?.display_name ?? ticket.reporter_agent_id ?? 'Unknown'} />
-          <DetailCard label="Due date" value={formatDateTime(ticket.due_at)} />
-          <DetailCard label="Created" value={formatDateTime(ticket.created_at)} />
-          <DetailCard label="Updated" value={formatDateTime(ticket.updated_at)} />
+        <aside className="h-fit rounded-xl border bg-white p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Details</h2>
+          <dl className="mt-3 divide-y">
+            <DetailRow label="Status" value={ticket.status} />
+            <DetailRow label="Priority" value={ticket.priority} />
+            <DetailRow label="Assignee" value={owner?.display_name ?? ticket.owner_agent_id ?? 'Unassigned'} />
+            <DetailRow label="Reporter" value={reporter?.display_name ?? ticket.reporter_agent_id ?? 'Unknown'} />
+            <DetailRow label="Due date" value={formatDateTime(ticket.due_at)} />
+            <DetailRow label="Created" value={formatDateTime(ticket.created_at)} />
+            <DetailRow label="Updated" value={formatDateTime(ticket.updated_at)} />
+            <DetailRow label="Labels" value={ticket.labels?.length ? ticket.labels.join(', ') : '-'} />
+          </dl>
         </aside>
       </section>
     </main>
   );
 }
 
-function DetailCard({ label, value }: { label: string; value: string | null | undefined }) {
+function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="rounded-lg border bg-white p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</h2>
-      <p className="mt-2 text-sm text-gray-900">{value && value.length > 0 ? value : '-'}</p>
+    <div className="grid grid-cols-[110px_1fr] gap-3 py-2.5">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</dt>
+      <dd className="text-sm text-gray-900">{value && value.length > 0 ? value : '-'}</dd>
     </div>
   );
 }
