@@ -35,14 +35,25 @@ export async function middleware(request: NextRequest) {
   const isPublic = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
 
   if (!data.user && !isPublic) {
+    console.info('[middleware] Redirecting to /login due to missing session', {
+      pathname,
+      isPublic,
+      hasSbAccessCookie: request.cookies
+        .getAll()
+        .some((cookie) => cookie.name.includes('sb-') && cookie.name.endsWith('auth-token'))
+    });
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
   if (data.user && pathname === '/login') {
+    console.info('[middleware] Redirecting authenticated user away from /login', {
+      userId: data.user.id,
+      to: '/tickets'
+    });
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = '/tickets';
     return NextResponse.redirect(url);
   }
 

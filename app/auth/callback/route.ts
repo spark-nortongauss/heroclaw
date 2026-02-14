@@ -5,6 +5,8 @@ import type { Database } from "@/lib/supabase/types";
 
 const DEFAULT_REDIRECT_PATH = "/tickets";
 
+export const runtime = "nodejs";
+
 function getSafeNextPath(nextPath: string | null) {
   if (!nextPath) return DEFAULT_REDIRECT_PATH;
 
@@ -32,8 +34,18 @@ export async function GET(request: NextRequest) {
   const redirectTo = new URL(nextPath, url.origin);
   const loginUrl = new URL("/login?error=auth_callback", url.origin);
 
+  const safeLog = {
+    hasCode: Boolean(code),
+    hasTokenHash: Boolean(tokenHash),
+    type: type ?? null,
+    nextPath,
+  };
+  console.info("[auth/callback] Incoming callback", safeLog);
+
   // Create the redirect response NOW so cookies can be attached to it
   const response = NextResponse.redirect(redirectTo);
+  let cookieWriteCount = 0;
+  const cookiesWritten: string[] = [];
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,6 +58,8 @@ export async function GET(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
+            cookieWriteCount += 1;
+            cookiesWritten.push(name);
           });
         },
       },
@@ -55,7 +69,19 @@ export async function GET(request: NextRequest) {
   // 1) PKCE flow (only if code exists)
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return response;
+    console.info("[auth/callback] exchangeCodeForSession", {
+      ok: !error,
+      error: error?.message ?? null,
+    });
+    if (!error) {
+      const { data: userData } = await supabase.auth.getUser();
+      console.info("[auth/callback] post-exchange user check", {
+        hasUser: Boolean(userData.user),
+        cookieWriteCount,
+        cookiesWritten,
+      });
+      if (userData.user) return response;
+    }
     return NextResponse.redirect(loginUrl);
   }
 
@@ -66,6 +92,13 @@ export async function GET(request: NextRequest) {
       token_hash: tokenHash,
     });
 
+    console.info("[auth/callback] verifyOtp", {
+      ok: !error,
+      error: error?.message ?? null,
+      hasSession: Boolean(data?.session),
+      hasUser: Boolean(data?.user),
+    });
+
     if (error) return NextResponse.redirect(loginUrl);
 
     // IMPORTANT: ensure cookies are written by setting the session explicitly
@@ -74,7 +107,22 @@ export async function GET(request: NextRequest) {
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       });
+      console.info("[auth/callback] setSession", {
+        ok: !setErr,
+        error: setErr?.message ?? null,
+      });
       if (setErr) return NextResponse.redirect(loginUrl);
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    console.info("[auth/callback] post-verify user check", {
+      hasUser: Boolean(userData.user),
+      cookieWriteCount,
+      cookiesWritten,
+    });
+
+    if (!userData.user) {
+      return NextResponse.redirect(loginUrl);
     }
 
     return response;
