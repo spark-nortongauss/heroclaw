@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import type { Json } from '@/lib/supabase/types';
 
 type CreateCommentInput = {
   ticketId: string;
@@ -21,6 +22,7 @@ type TicketPatchInput = {
     reporter_agent_id?: string | null;
     due_at?: string | null;
     labels?: string[];
+    context?: Json;
   };
 };
 
@@ -36,7 +38,8 @@ export async function updateTicketFields({ ticketId, patch }: TicketPatchInput) 
     'owner_agent_id',
     'reporter_agent_id',
     'due_at',
-    'labels'
+    'labels',
+    'context'
   ] as const;
 
   for (const key of allowedKeys) {
