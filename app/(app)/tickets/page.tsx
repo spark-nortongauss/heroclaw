@@ -5,11 +5,11 @@ import { Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { signOut } from '@/app/login/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TicketTable } from '@/components/ui/ticket-table';
+import CreateTicketModal from './CreateTicketModal';
 import type { TicketRowItem } from '@/components/ui/ticket-row';
 
 
@@ -73,6 +73,7 @@ export default function TicketsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const attachmentCountCache = useRef<Map<string, number>>(new Map());
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [loadingAttachmentIds, setLoadingAttachmentIds] = useState<Record<string, boolean>>({});
@@ -171,11 +172,6 @@ export default function TicketsPage() {
       <div>
         <h1 className="h1 font-[var(--font-heading)]">Tickets</h1>
         <p className="text-body">Track tickets and monitor status transitions.</p>
-        <form action={signOut} className="mt-2">
-          <Button type="submit" variant="secondary" size="sm">
-            Sign out
-          </Button>
-        </form>
       </div>
 
       <div className="rounded-xl border border-border bg-white p-3 shadow-sm">
@@ -224,7 +220,7 @@ export default function TicketsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]">
+          <Button className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]" onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
             Create Ticket
           </Button>
@@ -250,6 +246,14 @@ export default function TicketsPage() {
         onAttachmentClick={(id) => {
           setSelectedId(id);
           router.push(`/tickets/${id}#attachments`);
+        }}
+      />
+
+      <CreateTicketModal
+        open={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreated={async () => {
+          await queryClient.invalidateQueries({ queryKey: ['tickets'] });
         }}
       />
     </div>
