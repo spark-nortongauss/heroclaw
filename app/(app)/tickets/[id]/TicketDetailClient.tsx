@@ -1,6 +1,8 @@
 'use client';
 
-import { type ReactNode, useMemo, useState, useTransition } from 'react';
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+
+import { createClient } from '@/lib/supabase/client';
 
 import { createTicketComment, updateComment, updateTicketFields } from './actions';
 
@@ -100,7 +102,14 @@ function ReadOnlyValue({ value }: { value: string | null | undefined }) {
 }
 
 export default function TicketDetailClient({ ticket, comments, agents }: TicketDetailClientProps) {
-  const [body, setBody] = useState('');
+  const [text, setText] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Array<{ id: string; display_name: string; slug: string | null; department: string | null }>>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [mentionTokenStart, setMentionTokenStart] = useState<number | null>(null);
+  const [mentionAgents, setMentionAgents] = useState<Array<{ id: string; display_name: string; slug: string | null; department: string | null }>>([]);
+  const [hasLoadedMentionAgents, setHasLoadedMentionAgents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActivityTab>('comments');
@@ -111,6 +120,8 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
   const [commentError, setCommentError] = useState<string | null>(null);
   const [isCommentPending, startCommentTransition] = useTransition();
   const [editingField, setEditingField] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const blurTimeoutRef = useRef<number | null>(null);
   const [draftTicket, setDraftTicket] = useState({
     title: ticket.title,
     description: ticket.description ?? '',
@@ -124,31 +135,97 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
 
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
 
-  const mentionState = useMemo(() => {
-    const matches = body.match(/(?:^|\s)@([\w.-]*)$/);
-    if (!matches) return null;
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current !== null) {
+        window.clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
-    const query = matches[1]?.toLowerCase() ?? '';
-    const startIndex = body.lastIndexOf(`@${matches[1]}`);
-    if (startIndex < 0) return null;
+  const loadMentionAgents = async () => {
+    if (hasLoadedMentionAgents) return mentionAgents;
+    setHasLoadedMentionAgents(true);
 
-    return { query, startIndex, tokenLength: matches[1].length + 1 };
-  }, [body]);
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('mc_agents')
+      .select('id, display_name, slug, department')
+      .eq('is_active', true)
+      .order('display_name', { ascending: true });
 
-  const filteredAgents = useMemo(() => {
-    if (!mentionState) return [];
+    const loadedAgents = (data ?? []).filter((agent) => typeof agent.display_name === 'string' && agent.display_name.length > 0);
+    setMentionAgents(loadedAgents);
+    return loadedAgents;
+  };
 
-    return agents
-      .filter((agent) => agent.label.toLowerCase().includes(mentionState.query))
+  const getMentionContext = (value: string, caret: number) => {
+    const beforeCaret = value.slice(0, caret);
+    const atIndex = beforeCaret.lastIndexOf('@');
+    if (atIndex < 0) return null;
+
+    if (atIndex > 0 && !/\s/.test(beforeCaret[atIndex - 1])) return null;
+
+    const tokenAfterAt = beforeCaret.slice(atIndex + 1);
+    if (/\s/.test(tokenAfterAt)) return null;
+
+    return {
+      tokenStart: atIndex,
+      query: tokenAfterAt
+    };
+  };
+
+  const updateMentionSuggestions = async (value: string, caret: number) => {
+    const context = getMentionContext(value, caret);
+    if (!context) {
+      setIsOpen(false);
+      setQuery('');
+      setResults([]);
+      setActiveIndex(0);
+      setMentionTokenStart(null);
+      return;
+    }
+
+    const sourceAgents = hasLoadedMentionAgents ? mentionAgents : await loadMentionAgents();
+
+    const loweredQuery = context.query.toLowerCase();
+    const filtered = sourceAgents
+      .filter((agent) => {
+        const displayName = agent.display_name.toLowerCase();
+        const slug = (agent.slug ?? '').toLowerCase();
+        return displayName.startsWith(loweredQuery) || slug.startsWith(loweredQuery);
+      })
       .slice(0, 8);
-  }, [agents, mentionState]);
 
-  const handleSelectMention = (agent: Agent) => {
-    if (!mentionState) return;
+    setMentionTokenStart(context.tokenStart);
+    setQuery(context.query);
+    setResults(filtered);
+    setActiveIndex(0);
+    setIsOpen(filtered.length > 0);
+  };
 
-    const before = body.slice(0, mentionState.startIndex);
-    const after = body.slice(mentionState.startIndex + mentionState.tokenLength);
-    setBody(`${before}@${agent.label} ${after}`);
+  const handleSelectMention = (agent: { display_name: string }) => {
+    const textarea = textareaRef.current;
+    if (!textarea || mentionTokenStart === null) return;
+
+    const caret = textarea.selectionStart ?? text.length;
+    const before = text.slice(0, mentionTokenStart);
+    const after = text.slice(caret);
+    const inserted = `@${agent.display_name} `;
+    const nextValue = `${before}${inserted}${after}`;
+    const nextCaret = before.length + inserted.length;
+
+    setText(nextValue);
+    setIsOpen(false);
+    setQuery('');
+    setResults([]);
+    setActiveIndex(0);
+    setMentionTokenStart(null);
+
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCaret, nextCaret);
+    });
   };
 
   const parseMentionAgentIds = () => {
@@ -157,7 +234,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
     for (const agent of agents) {
       const escaped = agent.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`(^|\\s)@${escaped}(?=\\s|$)`, 'g');
-      if (regex.test(body)) {
+      if (regex.test(text)) {
         found.add(agent.id);
       }
     }
@@ -171,7 +248,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
     startTransition(async () => {
       const result = await createTicketComment({
         ticketId: ticket.id,
-        body,
+        body: text,
         mentionsAgentIds: parseMentionAgentIds()
       });
 
@@ -180,8 +257,48 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
         return;
       }
 
-      setBody('');
+      setText('');
+      setIsOpen(false);
+      setQuery('');
+      setResults([]);
+      setActiveIndex(0);
+      setMentionTokenStart(null);
     });
+  };
+
+  const handleCommentChange = async (nextValue: string, caret: number) => {
+    setText(nextValue);
+    await updateMentionSuggestions(nextValue, caret);
+  };
+
+  const handleCommentKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!isOpen || results.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev + 1) % results.length);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev - 1 + results.length) % results.length);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleSelectMention(results[activeIndex] ?? results[0]);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsOpen(false);
+      setResults([]);
+      setActiveIndex(0);
+      setMentionTokenStart(null);
+    }
   };
 
   const startEditField = (field: string) => {
@@ -437,20 +554,36 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                     <textarea
                       id="comment-body"
                       className="min-h-[120px] w-full rounded-md border p-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
-                      onChange={(event) => setBody(event.target.value)}
+                      onBlur={() => {
+                        blurTimeoutRef.current = window.setTimeout(() => {
+                          setIsOpen(false);
+                        }, 100);
+                      }}
+                      onChange={(event) => {
+                        void handleCommentChange(event.target.value, event.target.selectionStart ?? event.target.value.length);
+                      }}
+                      onFocus={(event) => {
+                        if (blurTimeoutRef.current !== null) {
+                          window.clearTimeout(blurTimeoutRef.current);
+                        }
+                        void updateMentionSuggestions(event.target.value, event.target.selectionStart ?? event.target.value.length);
+                      }}
+                      onKeyDown={handleCommentKeyDown}
                       placeholder="Write a comment"
-                      value={body}
+                      ref={textareaRef}
+                      value={text}
                     />
-                    {mentionState && filteredAgents.length > 0 ? (
-                      <div className="absolute left-0 top-full z-10 mt-1 w-full rounded-md border bg-white shadow">
-                        {filteredAgents.map((agent) => (
+                    {isOpen && results.length > 0 ? (
+                      <div aria-label={`Mention suggestions for ${query}`} className="absolute left-0 top-full z-10 mt-1 w-full rounded-md border bg-white shadow">
+                        {results.map((agent, index) => (
                           <button
                             key={agent.id}
-                            className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
+                            className={`block w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${index === activeIndex ? 'bg-gray-100' : ''}`}
+                            onMouseDown={(event) => event.preventDefault()}
                             onClick={() => handleSelectMention(agent)}
                             type="button"
                           >
-                            <span className="font-medium">{agent.label}</span>
+                            <span className="font-medium">{agent.display_name}</span>
                             <span className="ml-2 text-gray-500">{agent.department ?? 'Unknown'}</span>
                           </button>
                         ))}
@@ -463,7 +596,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                   <div className="mt-2 flex justify-end">
                     <button
                       className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-                      disabled={isPending || body.trim().length === 0}
+                      disabled={isPending || text.trim().length === 0}
                       onClick={submitComment}
                       type="button"
                     >
