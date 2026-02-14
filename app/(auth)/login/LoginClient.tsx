@@ -1,4 +1,3 @@
-// app/(auth)/login/LoginClient.tsx
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
@@ -8,7 +7,6 @@ const initialState: { error?: string; success?: string } = {};
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
-
   return (
     <button
       type="submit"
