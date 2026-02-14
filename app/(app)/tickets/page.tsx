@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { signOut } from '@/app/login/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -104,6 +105,11 @@ export default function TicketsPage() {
       <div>
         <h1 className="h1 font-[var(--font-heading)]">Tickets</h1>
         <p className="text-body">Track tickets and monitor status transitions.</p>
+        <form action={signOut} className="mt-2">
+          <Button type="submit" variant="secondary" size="sm">
+            Sign out
+          </Button>
+        </form>
       </div>
 
       <div className="rounded-xl border border-border bg-white p-3 shadow-sm">
