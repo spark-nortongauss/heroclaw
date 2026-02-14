@@ -16,7 +16,9 @@ async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('mc_tickets')
-    .select('id, title, status, owner_agent_id, updated_at')
+    .select(
+      'id, title, status, owner_agent_id, reporter_agent_id, updated_at, owner:mc_agents!mc_tickets_owner_agent_id_fkey(id, display_name), reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(id, display_name)'
+    )
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
@@ -78,8 +80,8 @@ export default function TicketsPage() {
       issueKey: `MC-${String(index + 101)}`,
       summary: ticket.title,
       status: ticket.status,
-      assignee: ticket.owner_agent_id || 'Unassigned',
-      reporter: ticket.owner_agent_id || 'System',
+      assignee: ticket.owner?.display_name ?? ticket.owner_agent_id ?? 'Unassigned',
+      reporter: ticket.reporter?.display_name ?? ticket.reporter_agent_id ?? 'System',
       parent: null,
       updatedLabel: relativeTime(ticket.updated_at),
       priority: choosePriority(ticket.status)

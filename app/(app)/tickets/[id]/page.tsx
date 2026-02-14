@@ -98,8 +98,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
       updated_at,
       closed_at,
       parent_ticket_id,
-      owner:mc_agents!mc_tickets_owner_agent_id_fkey(*),
-      reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(*)
+      owner:mc_agents!mc_tickets_owner_agent_id_fkey(id, display_name),
+      reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(id, display_name)
     `
     )
     .eq('id', params.id)
@@ -204,8 +204,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
         <aside className="space-y-3">
           <DetailCard label="Status" value={ticket.status} />
           <DetailCard label="Priority" value={ticket.priority} />
-          <DetailCard label="Assignee" value={agentLabel(owner) ?? 'Unassigned'} />
-          <DetailCard label="Reporter" value={agentLabel(reporter) ?? 'Unknown'} />
+          <DetailCard label="Assignee" value={owner?.display_name ?? ticket.owner_agent_id ?? 'Unassigned'} />
+          <DetailCard label="Reporter" value={reporter?.display_name ?? ticket.reporter_agent_id ?? 'Unknown'} />
           <DetailCard label="Due date" value={formatDateTime(ticket.due_at)} />
           <DetailCard label="Created" value={formatDateTime(ticket.created_at)} />
           <DetailCard label="Updated" value={formatDateTime(ticket.updated_at)} />
