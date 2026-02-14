@@ -3,6 +3,12 @@ import { createServerClient } from '@supabase/ssr';
 
 import type { Database } from '@/lib/supabase/types';
 
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: Record<string, unknown>;
+};
+
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
 
@@ -14,7 +20,7 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value);
             response.cookies.set(name, value, options);

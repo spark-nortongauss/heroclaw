@@ -3,6 +3,12 @@ import { cookies } from 'next/headers';
 
 import type { Database } from '@/lib/supabase/types';
 
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: Record<string, unknown>;
+};
+
 export function createSupabaseServerClient() {
   const cookieStore = cookies();
 
@@ -14,7 +20,7 @@ export function createSupabaseServerClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);

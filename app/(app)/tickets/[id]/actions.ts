@@ -64,7 +64,7 @@ export async function updateTicketFields({ ticketId, patch }: TicketPatchInput) 
     return { error: 'No valid fields to update.' };
   }
 
-  const { error } = await supabase.from('mc_tickets').update(allowedPatch).eq('id', ticketId);
+  const { error } = await supabase.from('mc_tickets').update(allowedPatch as never).eq('id', ticketId);
 
   if (error) {
     return { error: error.message };
