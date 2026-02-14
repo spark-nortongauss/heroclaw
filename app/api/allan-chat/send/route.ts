@@ -1,22 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractReply, gatewayRequest, getGatewayConfig } from '../gateway';
 
-type GatewayResponse = {
-  reply?: string;
-  message?: string;
-  output?: string;
-  data?: {
-    reply?: string;
-    message?: string;
-    output?: string;
-    text?: string;
-  };
-};
-
-function normalizeGatewayUrl(value: string) {
-  if (value.startsWith('wss://')) return `https://${value.slice(6)}`;
-  if (value.startsWith('ws://')) return `http://${value.slice(5)}`;
-  return value;
-}
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,43 +12,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL;
-    const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN;
-    const agentId = process.env.ALLAN_AGENT_ID;
-    const agentSlug = process.env.ALLAN_AGENT_SLUG;
-
-    if (!gatewayUrl || !gatewayToken || (!agentId && !agentSlug)) {
-      return NextResponse.json({ error: 'Allan chat is not configured on the server' }, { status: 500 });
+    const config = getGatewayConfig();
+    if (!config.config) {
+      console.error('[allan-chat/send] configuration error:', config.error);
+      return NextResponse.json({ error: config.error }, { status: 500 });
     }
 
-    const response = await fetch(normalizeGatewayUrl(gatewayUrl), {
+    const response = await gatewayRequest({
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${gatewayToken}`
-      },
-      body: JSON.stringify({
+      pathCandidates: ['/chat/send', '/v1/chat/send', '/chat', '/v1/chat', ''],
+      body: {
         message,
-        ...(agentId ? { agent_id: agentId } : {}),
-        ...(agentSlug ? { agent_slug: agentSlug } : {})
-      }),
-      cache: 'no-store'
+        input: message,
+        text: message
+      }
     });
 
     if (!response.ok) {
-      const details = await response.text();
-      return NextResponse.json({ error: details || 'Gateway request failed' }, { status: 502 });
+      console.error('[allan-chat/send] gateway error:', response.error);
+      return NextResponse.json({ error: response.error }, { status: response.status });
     }
 
-    const data = (await response.json()) as GatewayResponse;
-    const reply = data.reply ?? data.message ?? data.output ?? data.data?.reply ?? data.data?.message ?? data.data?.output ?? data.data?.text;
+    const reply = extractReply(response.data);
 
     if (!reply) {
       return NextResponse.json({ error: 'Gateway response did not include a reply' }, { status: 502 });
     }
 
     return NextResponse.json({ reply });
-  } catch {
+  } catch (error) {
+    console.error('[allan-chat/send] unexpected error:', error);
     return NextResponse.json({ error: 'Failed to send message to Allan' }, { status: 500 });
   }
 }

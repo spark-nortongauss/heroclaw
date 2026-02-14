@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -21,6 +21,20 @@ function createMessage(body: string, senderType: Message['sender_type']): Messag
   };
 }
 
+function mergeMessages(existing: Message[], incoming: Message[]) {
+  const seen = new Set(existing.map((msg) => msg.id));
+  const merged = [...existing];
+
+  for (const msg of incoming) {
+    if (!seen.has(msg.id)) {
+      merged.push(msg);
+      seen.add(msg.id);
+    }
+  }
+
+  return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
 export default function AllanChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState('');
@@ -31,6 +45,43 @@ export default function AllanChatPage() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
+
+  const latestTimestamp = useMemo(() => {
+    if (!messages.length) return undefined;
+    return messages[messages.length - 1]?.created_at;
+  }, [messages]);
+
+  useEffect(() => {
+    let stopped = false;
+
+    const poll = async () => {
+      try {
+        const params = latestTimestamp ? `?since=${encodeURIComponent(latestTimestamp)}` : '';
+        const response = await fetch(`/api/allan-chat/history${params}`, { cache: 'no-store' });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as { messages?: Message[] };
+        if (stopped || !Array.isArray(data.messages) || !data.messages.length) {
+          return;
+        }
+
+        setMessages((prev) => mergeMessages(prev, data.messages || []));
+      } catch {
+        // non-blocking polling fallback
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 3000);
+
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [latestTimestamp]);
 
   const send = async (e: FormEvent) => {
     e.preventDefault();
