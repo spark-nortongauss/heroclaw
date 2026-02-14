@@ -40,7 +40,15 @@ export default function AllanChatPage() {
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const gatewayUrl = useMemo(() => {
+    const rawUrl = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL?.trim();
+    if (!rawUrl) return null;
+    if (rawUrl.startsWith('wss://')) return rawUrl;
+    if (rawUrl.startsWith('https://')) return `wss://${rawUrl.slice('https://'.length)}`;
+    return rawUrl.replace(/^ws:\/\//, 'wss://');
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,6 +91,51 @@ export default function AllanChatPage() {
     };
   }, [latestTimestamp]);
 
+  useEffect(() => {
+    if (!gatewayUrl) {
+      setError('Missing NEXT_PUBLIC_OPENCLAW_GATEWAY_URL');
+      return;
+    }
+
+    const socket = new WebSocket(gatewayUrl);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      setError(null);
+    };
+
+    socket.onmessage = (event) => {
+      const payload = typeof event.data === 'string' ? event.data : '';
+
+      try {
+        const data = JSON.parse(payload) as { reply?: string; message?: string; text?: string; body?: string };
+        const reply = data.reply || data.message || data.text || data.body;
+
+        if (reply) {
+          setMessages((prev) => [...prev, createMessage(reply, 'agent')]);
+          return;
+        }
+      } catch {
+        if (payload) {
+          setMessages((prev) => [...prev, createMessage(payload, 'agent')]);
+        }
+      }
+    };
+
+    socket.onerror = () => {
+      setError('WebSocket connection error');
+    };
+
+    socket.onclose = () => {
+      socketRef.current = null;
+    };
+
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [gatewayUrl]);
+
   const send = async (e: FormEvent) => {
     e.preventDefault();
     const message = body.trim();
@@ -97,21 +150,13 @@ export default function AllanChatPage() {
     setMessages((prev) => [...prev, createMessage(message, 'user')]);
 
     try {
-      const response = await fetch('/api/allan-chat/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message })
-      });
+      const socket = socketRef.current;
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error || 'Unable to send message');
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        throw new Error('WebSocket is not connected');
       }
 
-      const data = (await response.json()) as { reply: string };
-      setMessages((prev) => [...prev, createMessage(data.reply, 'agent')]);
+      socket.send(JSON.stringify({ message }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send message');
     } finally {
