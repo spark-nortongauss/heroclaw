@@ -119,40 +119,52 @@ export async function createTicketComment({ ticketId, body, mentionsAgentIds }: 
     return { error: userError?.message ?? 'Unable to resolve authenticated user.' };
   }
 
-  const { data: agentColumns, error: agentColumnsError } = await (supabase as any)
-    .from('information_schema.columns')
-    .select('column_name')
-    .eq('table_schema', 'public')
-    .eq('table_name', 'mc_agents');
-
-  if (agentColumnsError) {
-    return { error: agentColumnsError.message };
-  }
-
-  const availableColumns = new Set((agentColumns ?? []).map((column: { column_name: string }) => column.column_name));
-
-  const agentLookup = availableColumns.has('user_id')
-    ? { column: 'user_id', value: userData.user.id }
-    : availableColumns.has('auth_user_id')
-      ? { column: 'auth_user_id', value: userData.user.id }
-      : availableColumns.has('supabase_user_id')
-        ? { column: 'supabase_user_id', value: userData.user.id }
-        : availableColumns.has('email') && userData.user.email
-          ? { column: 'email', value: userData.user.email }
-          : null;
-
-  if (!agentLookup) {
-    return { error: 'Unable to find a supported mc_agents mapping column.' };
-  }
-
-  const { data: agentData, error: agentError } = await (supabase as any)
+  let { data: agentData, error: agentError } = await (supabase as any)
     .from('mc_agents')
     .select('id')
-    .eq(agentLookup.column, agentLookup.value)
+    .eq('auth_user_id', userData.user.id)
     .single();
 
   if (agentError || !agentData?.id) {
-    return { error: agentError?.message ?? 'Unable to resolve agent for authenticated user.' };
+    const { data: humanAgent, error: humanAgentError } = await (supabase as any)
+      .from('mc_agents')
+      .select('id')
+      .or("role.eq.human,display_name.ilike.%(Human)%,display_name.ilike.%Tayroni%")
+      .limit(1)
+      .maybeSingle();
+
+    if (humanAgentError) {
+      return { error: humanAgentError.message };
+    }
+
+    if (humanAgent?.id) {
+      const { error: attachError } = await (supabase as any)
+        .from('mc_agents')
+        .update({ auth_user_id: userData.user.id })
+        .eq('id', humanAgent.id)
+        .is('auth_user_id', null);
+
+      if (attachError) {
+        return { error: attachError.message };
+      }
+
+      const agentLookup = await (supabase as any)
+        .from('mc_agents')
+        .select('id')
+        .eq('auth_user_id', userData.user.id)
+        .single();
+
+      agentData = agentLookup.data;
+      agentError = agentLookup.error;
+    }
+  }
+
+  if (agentError || !agentData?.id) {
+    return {
+      error:
+        agentError?.message ??
+        'Unable to resolve agent for authenticated user. Please create or mark exactly one human agent row.'
+    };
   }
 
   const { error } = await (supabase as any).from('mc_ticket_comments').insert({
