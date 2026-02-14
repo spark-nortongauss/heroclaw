@@ -20,8 +20,9 @@ Production-ready Next.js App Router interface for managing Clawdbot agents via S
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (optional, server-only)
-   - `ALLAN_GATEWAY_URL` (optional)
-   - `ALLAN_GATEWAY_TOKEN` (optional)
+   - `OPENCLAW_GATEWAY_URL`
+   - `OPENCLAW_GATEWAY_TOKEN`
+   - `OPENCLAW_ALLAN_AGENT_ID` (optional)
 4. Install dependencies:
    ```bash
    npm install
