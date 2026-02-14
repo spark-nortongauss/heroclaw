@@ -113,43 +113,32 @@ export async function createTicketComment({ ticketId, body, mentionsAgentIds }: 
 
   const supabase = createSupabaseServerClient();
 
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const { data: userData } = await supabase.auth.getUser();
+  const email = (userData.user?.email ?? '').toLowerCase();
 
-  if (userError || !userData.user) {
-    return { error: userError?.message ?? 'Unable to resolve authenticated user.' };
+  if (!userData.user || !email) {
+    return { error: 'Unable to resolve authenticated user.' };
   }
 
-  const { data: agentColumns, error: agentColumnsError } = await (supabase as any)
-    .from('information_schema.columns')
-    .select('column_name')
-    .eq('table_schema', 'public')
-    .eq('table_name', 'mc_agents');
+  const isMissingColumnError = (error: { message?: string } | null) =>
+    (error?.message ?? '').toLowerCase().includes('column') &&
+    (error?.message ?? '').toLowerCase().includes('does not exist');
 
-  if (agentColumnsError) {
-    return { error: agentColumnsError.message };
-  }
-
-  const availableColumns = new Set((agentColumns ?? []).map((column: { column_name: string }) => column.column_name));
-
-  const agentLookup = availableColumns.has('user_id')
-    ? { column: 'user_id', value: userData.user.id }
-    : availableColumns.has('auth_user_id')
-      ? { column: 'auth_user_id', value: userData.user.id }
-      : availableColumns.has('supabase_user_id')
-        ? { column: 'supabase_user_id', value: userData.user.id }
-        : availableColumns.has('email') && userData.user.email
-          ? { column: 'email', value: userData.user.email }
-          : null;
-
-  if (!agentLookup) {
-    return { error: 'Unable to find a supported mc_agents mapping column.' };
-  }
-
-  const { data: agentData, error: agentError } = await (supabase as any)
+  let { data: agentData, error: agentError } = await (supabase as any)
     .from('mc_agents')
     .select('id')
-    .eq(agentLookup.column, agentLookup.value)
+    .eq('email', email)
     .single();
+
+  if (agentError && isMissingColumnError(agentError)) {
+    const fallbackLookup = await (supabase as any).from('mc_agents').select('id').eq('auth_email', email).single();
+    agentData = fallbackLookup.data;
+    agentError = fallbackLookup.error;
+
+    if (agentError && isMissingColumnError(agentError)) {
+      return { error: 'Cannot map this user to an agent. mc_agents needs an email/user mapping column.' };
+    }
+  }
 
   if (agentError || !agentData?.id) {
     return { error: agentError?.message ?? 'Unable to resolve agent for authenticated user.' };
