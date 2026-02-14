@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { signOut } from '@/app/login/actions';
@@ -64,11 +64,15 @@ const choosePriority = (status: string): TicketRowItem['priority'] => {
 
 export default function TicketsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [assignee, setAssignee] = useState('all');
   const [priority, setPriority] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const attachmentCountCache = useRef<Map<string, number>>(new Map());
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [loadingAttachmentIds, setLoadingAttachmentIds] = useState<Record<string, boolean>>({});
@@ -100,8 +104,8 @@ export default function TicketsPage() {
       issueKey: `MC-${String(index + 101)}`,
       summary: ticket.title,
       status: normalizeStatus(ticket.status),
-      assignee: ticket.owner?.[0]?.display_name ?? ticket.owner_agent_id ?? 'Unassigned',
-      reporter: ticket.reporter?.[0]?.display_name ?? ticket.reporter_agent_id ?? 'System',
+      assignee: ticket.owner?.[0]?.display_name ?? '-',
+      reporter: ticket.reporter?.[0]?.display_name ?? '-',
       parent: null,
       updatedLabel: relativeTime(ticket.updated_at),
       priority: choosePriority(ticket.status)
@@ -121,6 +125,46 @@ export default function TicketsPage() {
   );
 
   const assignees = useMemo(() => ['all', ...new Set(ticketRows.map((ticket) => ticket.assignee))], [ticketRows]);
+
+  const allVisibleSelected = filtered.length > 0 && filtered.every((ticket) => selectedIds.includes(ticket.id));
+
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    const visibleIds = filtered.map((ticket) => ticket.id);
+    if (checked) {
+      setSelectedIds((prev) => [...new Set([...prev, ...visibleIds])]);
+      return;
+    }
+
+    setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+  };
+
+  const toggleSelectedTicket = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      return;
+    }
+
+    setSelectedIds((prev) => prev.filter((item) => item !== id));
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0 || !window.confirm(`Delete ${selectedIds.length} selected ticket(s)?`)) return;
+
+    setDeleteError(null);
+    setIsDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from('mc_tickets').delete().in('id', selectedIds);
+    setIsDeleting(false);
+
+    if (error) {
+      setDeleteError(error.message);
+      return;
+    }
+
+    setSelectedIds([]);
+    await queryClient.invalidateQueries({ queryKey: ['tickets'] });
+  };
 
   return (
     <div className="page-transition space-y-4">
@@ -184,7 +228,11 @@ export default function TicketsPage() {
             <Plus className="mr-1 h-4 w-4" />
             Create Ticket
           </Button>
+          <Button variant="destructive" disabled={selectedIds.length === 0 || isDeleting} onClick={handleDeleteSelected}>
+            {isDeleting ? 'Deleting…' : 'Delete'}
+          </Button>
         </div>
+        {deleteError && <p className="mt-2 text-sm text-red-600">{deleteError}</p>}
       </div>
 
       <TicketTable
@@ -192,6 +240,10 @@ export default function TicketsPage() {
         loading={isLoading}
         selectedId={selectedId}
         onSelect={setSelectedId}
+        selectedIds={selectedIds}
+        allVisibleSelected={allVisibleSelected}
+        onToggleSelectAll={toggleSelectAllVisible}
+        onToggleTicket={toggleSelectedTicket}
         attachmentCounts={attachmentCounts}
         loadingAttachmentIds={loadingAttachmentIds}
         onAttachmentHover={loadAttachmentCount}

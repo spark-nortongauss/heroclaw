@@ -32,6 +32,8 @@ export function TicketRow({
   ticket,
   selected,
   onSelect,
+  selectedForDelete,
+  onSelectForDelete,
   attachmentCount,
   attachmentLoading,
   onAttachmentHover,
@@ -40,6 +42,8 @@ export function TicketRow({
   ticket: TicketRowItem;
   selected?: boolean;
   onSelect?: (id: string) => void;
+  selectedForDelete?: boolean;
+  onSelectForDelete?: (checked: boolean) => void;
   attachmentCount?: number;
   attachmentLoading?: boolean;
   onAttachmentHover?: (id: string) => void;
@@ -69,6 +73,18 @@ export function TicketRow({
         selected && 'bg-[#EBECF0]'
       )}
     >
+      <TableCell className="py-2" onClick={(event) => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          aria-label={`Select ${ticket.issueKey}`}
+          checked={Boolean(selectedForDelete)}
+          onChange={(event) => {
+            onSelectForDelete?.(event.target.checked);
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        />
+      </TableCell>
       <TableCell className="py-2">
         <span className="font-medium text-[#0052CC]">{ticket.issueKey}</span>
       </TableCell>
