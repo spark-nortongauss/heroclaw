@@ -1,11 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { useToast } from '@/components/ui/toast';
 
 type Message = {
   id: string;
@@ -14,59 +12,60 @@ type Message = {
   created_at: string;
 };
 
+function createMessage(body: string, senderType: Message['sender_type']): Message {
+  return {
+    id: `${Date.now()}-${Math.random()}`,
+    body,
+    sender_type: senderType,
+    created_at: new Date().toISOString()
+  };
+}
+
 export default function AllanChatPage() {
-  const supabase = createClient();
-  const { notify } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
-        .from('mc_chat_messages')
-        .select('id, body, sender_type, created_at')
-        .eq('channel', 'allan')
-        .order('created_at');
-      setMessages((data as Message[]) ?? []);
-    };
-    load();
-
-    const channel = supabase
-      .channel('allan-chat')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mc_chat_messages', filter: 'channel=eq.allan' }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as Message]);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase]);
-
-  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, sending]);
 
   const send = async (e: FormEvent) => {
     e.preventDefault();
-    setSending(true);
-    const { data } = await supabase.auth.getUser();
+    const message = body.trim();
 
-    const { error } = await supabase.from('mc_chat_messages').insert({
-      channel: 'allan',
-      sender_type: 'user',
-      sender_user_id: data.user?.id ?? null,
-      body
-    });
-
-    if (error) {
-      notify(error.message, 'error');
+    if (!message || sending) {
+      return;
     }
 
+    setError(null);
+    setSending(true);
     setBody('');
-    setSending(false);
+    setMessages((prev) => [...prev, createMessage(message, 'user')]);
+
+    try {
+      const response = await fetch('/api/allan-chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message })
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || 'Unable to send message');
+      }
+
+      const data = (await response.json()) as { reply: string };
+      setMessages((prev) => [...prev, createMessage(data.reply, 'agent')]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send message');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -85,9 +84,12 @@ export default function AllanChatPage() {
           ))}
           <div ref={endRef} />
         </div>
-        <form onSubmit={send} className="flex gap-2 border-t p-3">
-          <Input value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message Allan..." required />
-          <Button type="submit" disabled={sending}>{sending ? 'Sending...' : 'Send'}</Button>
+        <form onSubmit={send} className="border-t p-3">
+          <div className="flex gap-2">
+            <Input value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message Allan..." required />
+            <Button type="submit" disabled={sending}>{sending ? 'Sending...' : 'Send'}</Button>
+          </div>
+          {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
         </form>
       </Card>
     </div>
