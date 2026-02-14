@@ -157,8 +157,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
     .filter((agent): agent is { id: string; label: string; department: string | null } => Boolean(agent.label));
 
   return (
-    <main className="space-y-5 p-4 sm:p-6">
-      <Link className="inline-flex text-xs font-medium uppercase tracking-wide text-gray-500 hover:text-gray-800" href="/tickets">
+    <main className="space-y-5 bg-white p-4 sm:p-6">
+      <Link className="inline-flex text-xs font-medium uppercase tracking-wide text-[#808080] hover:text-[#111111]" href="/tickets">
         ← Back to tickets
       </Link>
 

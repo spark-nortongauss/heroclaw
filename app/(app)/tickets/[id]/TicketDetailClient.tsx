@@ -66,7 +66,7 @@ function highlightMentions(body: string) {
   return parts.map((part, index) => {
     if (part.startsWith('@')) {
       return (
-        <span key={`${part}-${index}`} className="rounded bg-blue-100 px-1 text-blue-700">
+        <span key={`${part}-${index}`} className="rounded bg-[#D9FF35]/70 px-1 text-[#111111]">
           {part}
         </span>
       );
@@ -83,22 +83,23 @@ function avatarInitial(value: string | null | undefined) {
 
 function statusPillClasses(status: string | null | undefined) {
   const normalized = (status ?? '').toLowerCase().replace(/\s+/g, '_');
-  if (['done', 'closed', 'completed'].includes(normalized)) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (['open', 'pending', 'todo'].includes(normalized)) return 'bg-rose-50 text-rose-700 border-rose-200';
-  if (['in_progress', 'in progress', 'ongoing'].includes(normalized)) return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-slate-100 text-slate-700 border-slate-200';
+  if (['done', 'closed', 'completed'].includes(normalized)) return 'border-[#D9FF35] bg-[#D9FF35] text-[#111111]';
+  if (['open', 'pending', 'todo', 'in_progress', 'in progress', 'ongoing'].includes(normalized)) {
+    return 'border-[#808080] bg-white text-[#4b4b4b] shadow-[inset_3px_0_0_#D9FF35]';
+  }
+  return 'border-[#808080] bg-white text-[#4b4b4b]';
 }
 
 function priorityPillClasses(priority: string | null | undefined) {
   const normalized = (priority ?? '').toLowerCase();
-  if (normalized.includes('high') || normalized.includes('urgent')) return 'bg-rose-50 text-rose-700 border-rose-200';
-  if (normalized.includes('medium')) return 'bg-amber-50 text-amber-700 border-amber-200';
-  if (normalized.includes('low')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  return 'bg-slate-100 text-slate-700 border-slate-200';
+  if (normalized.includes('high') || normalized.includes('urgent')) return 'border-[#D9FF35] bg-[#D9FF35]/60 text-[#111111]';
+  if (normalized.includes('medium')) return 'border-[#808080] bg-[#D9FF35]/25 text-[#2b2b2b]';
+  if (normalized.includes('low')) return 'border-[#808080] bg-white text-[#4b4b4b]';
+  return 'border-[#808080] bg-white text-[#4b4b4b]';
 }
 
 function ReadOnlyValue({ value }: { value: string | null | undefined }) {
-  return <span className="text-sm text-gray-900">{value && value.length > 0 ? value : '-'}</span>;
+  return <span className="text-sm text-[#111111]">{value && value.length > 0 ? value : '-'}</span>;
 }
 
 export default function TicketDetailClient({ ticket, comments, agents }: TicketDetailClientProps) {
@@ -388,33 +389,33 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
 
   return (
     <>
-      <header className="animate-[fadein_.2s_ease] rounded-xl border bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Ticket #{ticket.ticket_no ?? '-'}</p>
+      <header className="animate-[fadein_.2s_ease] rounded-xl border border-[#808080]/35 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#808080]">Ticket #{ticket.ticket_no ?? '-'}</p>
         <div className="mt-2">
           {editingField === 'title' ? (
             <div className="space-y-2">
               <input
-                className="w-full rounded-md border px-3 py-2 text-2xl font-semibold text-gray-900 outline-none transition focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#808080]/50 px-3 py-2 text-2xl font-semibold text-[#111111] outline-none transition focus:ring-2 focus:ring-[#D9FF35]"
                 onChange={(event) => setDraftTicket((prev) => ({ ...prev, title: event.target.value }))}
                 value={draftTicket.title}
               />
               <div className="flex gap-2">
-                <button className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white" onClick={() => saveField('title')} type="button">
+                <button className="rounded-md bg-[#D9FF35] px-3 py-1.5 text-sm font-medium text-[#111111] hover:bg-[#cfe92f]" onClick={() => saveField('title')} type="button">
                   {isTicketPending ? 'Saving...' : 'Save'}
                 </button>
-                <button className="rounded-md border px-3 py-1.5 text-sm" onClick={cancelEditField} type="button">
+                <button className="rounded-md border border-[#808080]/50 px-3 py-1.5 text-sm text-[#4b4b4b] hover:bg-[#808080]/10" onClick={cancelEditField} type="button">
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
             <button
-              className="group flex w-full items-center justify-between text-left"
+              className="group flex w-full items-center justify-between text-left text-[#111111]"
               onClick={() => startEditField('title')}
               type="button"
             >
-              <h1 className="text-2xl font-semibold text-gray-900">{ticket.title}</h1>
-              <span className="text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">Edit</span>
+              <h1 className="text-2xl font-semibold text-[#111111]">{ticket.title}</h1>
+              <span className="text-xs text-[#808080] opacity-0 transition group-hover:opacity-100">Edit</span>
             </button>
           )}
         </div>
@@ -423,11 +424,11 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_320px]">
         <div className="space-y-5">
-          <section className="animate-[fadein_.25s_ease] rounded-xl border bg-white p-5 shadow-sm">
+          <section className="animate-[fadein_.25s_ease] rounded-xl border border-[#808080]/35 bg-white p-5 shadow-sm">
             <div className="group flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Description</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-[#808080]">Description</h2>
               {editingField !== 'description' ? (
-                <button className="text-xs text-gray-400 opacity-0 transition group-hover:opacity-100" onClick={() => startEditField('description')} type="button">
+                <button className="text-xs text-[#808080] opacity-0 transition group-hover:opacity-100" onClick={() => startEditField('description')} type="button">
                   Edit
                 </button>
               ) : null}
@@ -436,28 +437,28 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
             {editingField === 'description' ? (
               <div className="mt-3 space-y-2 overflow-hidden transition-all">
                 <textarea
-                  className="min-h-[140px] w-full rounded-md border p-3 text-sm leading-6 text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="min-h-[140px] w-full rounded-md border border-[#808080]/50 p-3 text-sm leading-6 text-[#1f1f1f] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                   onChange={(event) => setDraftTicket((prev) => ({ ...prev, description: event.target.value }))}
                   value={draftTicket.description}
                 />
                 <div className="flex gap-2">
-                  <button className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white" onClick={() => saveField('description')} type="button">
+                  <button className="rounded-md bg-[#D9FF35] px-3 py-1.5 text-sm font-medium text-[#111111] hover:bg-[#cfe92f]" onClick={() => saveField('description')} type="button">
                     {isTicketPending ? 'Saving...' : 'Save'}
                   </button>
-                  <button className="rounded-md border px-3 py-1.5 text-sm" onClick={cancelEditField} type="button">
+                  <button className="rounded-md border border-[#808080]/50 px-3 py-1.5 text-sm text-[#4b4b4b] hover:bg-[#808080]/10" onClick={cancelEditField} type="button">
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-800">{ticket.description ?? '(No description provided)'}</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f1f1f]">{ticket.description ?? '(No description provided)'}</p>
             )}
           </section>
 
-          <section className="rounded-xl border bg-white p-5 shadow-sm">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Activity</h2>
+          <section className="rounded-xl border border-[#808080]/35 bg-white p-5 shadow-sm">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#808080]">Activity</h2>
 
-            <div className="mt-4 border-b">
+            <div className="mt-4 border-b border-[#808080]/30">
               <nav className="flex gap-2" aria-label="Activity tabs">
                 {[
                   { key: 'all', label: 'All' },
@@ -469,7 +470,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                     <button
                       key={tab.key}
                       className={`rounded-t-md px-3 py-2 text-sm font-medium transition ${
-                        isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:-translate-y-px hover:text-gray-700'
+                        isActive ? 'border-b-2 border-[#D9FF35] bg-[#D9FF35]/25 text-[#111111]' : 'text-[#808080] hover:-translate-y-px hover:text-[#4b4b4b]'
                       }`}
                       onClick={() => setActiveTab(tab.key as ActivityTab)}
                       type="button"
@@ -485,25 +486,25 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
               <div className="mt-5 space-y-5">
                 <div className="space-y-5">
                   {comments.length === 0 ? (
-                    <p className="text-sm text-gray-500">No comments yet.</p>
+                    <p className="text-sm text-[#808080]">No comments yet.</p>
                   ) : (
                     comments.map((comment) => (
                       <article key={comment.id} className="group relative pl-11">
-                        <span className="absolute left-4 top-10 h-[calc(100%-1.5rem)] w-px bg-gray-200" aria-hidden="true" />
-                        <div className="absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-700">
+                        <span className="absolute left-4 top-10 h-[calc(100%-1.5rem)] w-px bg-[#808080]/20" aria-hidden="true" />
+                        <div className="absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-[#808080]/20 text-xs font-semibold text-[#4b4b4b]">
                           {avatarInitial(comment.author?.label)}
                         </div>
 
-                        <div className="rounded-lg border p-3 shadow-sm transition hover:shadow">
-                          <header className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-gray-500">
+                        <div className="rounded-lg border border-[#808080]/35 p-3 shadow-sm transition hover:shadow">
+                          <header className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-[#808080]">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-semibold text-gray-900">{comment.author?.label ?? 'Unknown'}</span>
-                              <span className="rounded bg-gray-100 px-1.5 py-0.5">{comment.author?.department ?? 'unknown'}</span>
+                              <span className="text-sm font-semibold text-[#111111]">{comment.author?.label ?? 'Unknown'}</span>
+                              <span className="rounded border border-[#808080]/40 bg-[#808080]/10 px-1.5 py-0.5">{comment.author?.department ?? 'unknown'}</span>
                               <span>{formatDateTime(comment.created_at)}</span>
                             </div>
                             {editingCommentId !== comment.id ? (
                               <button
-                                className="text-xs text-gray-400 opacity-0 transition group-hover:opacity-100 hover:text-gray-600"
+                                className="text-xs text-[#808080] opacity-0 transition group-hover:opacity-100 hover:text-[#111111]"
                                 onClick={() => beginEditComment(comment)}
                                 type="button"
                               >
@@ -515,17 +516,17 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                           {editingCommentId === comment.id ? (
                             <div className="space-y-2 overflow-hidden transition-all">
                               <textarea
-                                className="min-h-[100px] w-full rounded-md border p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                className="min-h-[100px] w-full rounded-md border border-[#808080]/50 p-2 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                                 onChange={(event) => setEditingCommentBody(event.target.value)}
                                 value={editingCommentBody}
                               />
                               {commentError ? <p className="text-sm text-red-600">{commentError}</p> : null}
                               <div className="flex gap-2">
-                                <button className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white" disabled={isCommentPending} onClick={saveComment} type="button">
+                                <button className="rounded-md bg-[#D9FF35] px-3 py-1.5 text-sm font-medium text-[#111111] hover:bg-[#cfe92f]" disabled={isCommentPending} onClick={saveComment} type="button">
                                   {isCommentPending ? 'Saving...' : 'Save'}
                                 </button>
                                 <button
-                                  className="rounded-md border px-3 py-1.5 text-sm"
+                                  className="rounded-md border border-[#808080]/50 px-3 py-1.5 text-sm text-[#4b4b4b] hover:bg-[#808080]/10"
                                   onClick={() => {
                                     setEditingCommentId(null);
                                     setEditingCommentBody('');
@@ -538,7 +539,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                               </div>
                             </div>
                           ) : (
-                            <p className="whitespace-pre-wrap text-sm text-gray-800">{highlightMentions(comment.body)}</p>
+                            <p className="whitespace-pre-wrap text-sm text-[#1f1f1f]">{highlightMentions(comment.body)}</p>
                           )}
                         </div>
                       </article>
@@ -546,14 +547,14 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                   )}
                 </div>
 
-                <div className="rounded-lg border p-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Add comment</h3>
-                  <p className="mt-1 text-xs text-gray-500">Type @ to mention an agent</p>
+                <div className="rounded-lg border border-[#808080]/35 p-4">
+                  <h3 className="text-sm font-semibold text-[#111111]">Add comment</h3>
+                  <p className="mt-1 text-xs text-[#808080]">Type @ to mention an agent</p>
 
                   <div className="relative mt-3">
                     <textarea
                       id="comment-body"
-                      className="min-h-[120px] w-full rounded-md border p-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                      className="min-h-[120px] w-full rounded-md border border-[#808080]/50 p-2 text-sm text-[#111111] outline-none ring-[#D9FF35] transition focus:ring-2"
                       onBlur={() => {
                         blurTimeoutRef.current = window.setTimeout(() => {
                           setIsOpen(false);
@@ -574,17 +575,17 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                       value={text}
                     />
                     {isOpen && results.length > 0 ? (
-                      <div aria-label={`Mention suggestions for ${query}`} className="absolute left-0 top-full z-10 mt-1 w-full rounded-md border bg-white shadow">
+                      <div aria-label={`Mention suggestions for ${query}`} className="absolute left-0 top-full z-10 mt-1 w-full rounded-md border border-[#808080]/40 bg-white shadow">
                         {results.map((agent, index) => (
                           <button
                             key={agent.id}
-                            className={`block w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${index === activeIndex ? 'bg-gray-100' : ''}`}
+                            className={`block w-full px-3 py-2 text-left text-sm hover:bg-[#808080]/10 ${index === activeIndex ? 'bg-[#808080]/10' : ''}`}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() => handleSelectMention(agent)}
                             type="button"
                           >
                             <span className="font-medium">{agent.display_name}</span>
-                            <span className="ml-2 text-gray-500">{agent.department ?? 'Unknown'}</span>
+                            <span className="ml-2 text-[#808080]">{agent.department ?? 'Unknown'}</span>
                           </button>
                         ))}
                       </div>
@@ -595,7 +596,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
 
                   <div className="mt-2 flex justify-end">
                     <button
-                      className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="rounded-md bg-[#D9FF35] px-3 py-2 text-sm font-medium text-[#111111] hover:bg-[#cfe92f] disabled:cursor-not-allowed disabled:bg-[#808080]/30 disabled:text-[#808080]"
                       disabled={isPending || text.trim().length === 0}
                       onClick={submitComment}
                       type="button"
@@ -606,32 +607,32 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
                 </div>
               </div>
             ) : (
-              <div className="mt-5 rounded-lg border border-dashed p-6 text-sm text-gray-500">Coming soon.</div>
+              <div className="mt-5 rounded-lg border border-[#808080]/50 border-dashed p-6 text-sm text-[#808080]">Coming soon.</div>
             )}
           </section>
         </div>
 
-        <aside className="h-fit rounded-xl border bg-white p-4 shadow-sm">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Details</h2>
-          <dl className="mt-3 divide-y">
+        <aside className="h-fit rounded-xl border border-[#808080]/35 bg-white p-4 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#808080]">Details</h2>
+          <dl className="mt-3 divide-y divide-[#808080]/25">
             <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Status</dt>
               <dd>
                 {editingField === 'status' ? (
                   <div className="space-y-2">
                     <input
-                      className="w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                       onChange={(event) => setDraftTicket((prev) => ({ ...prev, status: event.target.value }))}
                       value={draftTicket.status}
                     />
                     <InlineEditorActions onCancel={cancelEditField} onSave={() => saveField('status')} pending={isTicketPending} />
                   </div>
                 ) : (
-                  <button className="group inline-flex items-center gap-2" onClick={() => startEditField('status')} type="button">
+                  <button className="group inline-flex items-center gap-2 text-[#111111]" onClick={() => startEditField('status')} type="button">
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusPillClasses(ticket.status)}`}>
                       {ticket.status ?? 'Unset'}
                     </span>
-                    <span className="text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">Edit</span>
+                    <span className="text-xs text-[#808080] opacity-0 transition group-hover:opacity-100">Edit</span>
                   </button>
                 )}
               </dd>
@@ -651,7 +652,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
               }
             >
               <input
-                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                 onChange={(event) => setDraftTicket((prev) => ({ ...prev, priority: event.target.value }))}
                 value={draftTicket.priority}
               />
@@ -667,7 +668,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
               view={<ReadOnlyValue value={agentById.get(ticket.owner_agent_id ?? '')?.label ?? 'Unassigned'} />}
             >
               <select
-                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                 onChange={(event) => setDraftTicket((prev) => ({ ...prev, owner_agent_id: event.target.value }))}
                 value={draftTicket.owner_agent_id}
               >
@@ -690,7 +691,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
               view={<ReadOnlyValue value={agentById.get(ticket.reporter_agent_id ?? '')?.label ?? 'Unknown'} />}
             >
               <select
-                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                 onChange={(event) => setDraftTicket((prev) => ({ ...prev, reporter_agent_id: event.target.value }))}
                 value={draftTicket.reporter_agent_id}
               >
@@ -713,7 +714,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
               view={<ReadOnlyValue value={formatDateTime(ticket.due_at)} />}
             >
               <input
-                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                 onChange={(event) => setDraftTicket((prev) => ({ ...prev, due_at: event.target.value }))}
                 type="date"
                 value={draftTicket.due_at}
@@ -730,7 +731,7 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
               view={<ReadOnlyValue value={ticket.labels?.length ? ticket.labels.join(', ') : '-'} />}
             >
               <input
-                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
                 onChange={(event) => setDraftTicket((prev) => ({ ...prev, labels: event.target.value }))}
                 placeholder="bug, qa, backend"
                 value={draftTicket.labels}
@@ -738,12 +739,12 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
             </EditableDetailRow>
 
             <div className="grid grid-cols-[120px_1fr] gap-3 py-2.5">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Created</dt>
-              <dd className="text-sm text-gray-900">{formatDateTime(ticket.created_at)}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Created</dt>
+              <dd className="text-sm text-[#111111]">{formatDateTime(ticket.created_at)}</dd>
             </div>
             <div className="grid grid-cols-[120px_1fr] gap-3 py-2.5">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Updated</dt>
-              <dd className="text-sm text-gray-900">{formatDateTime(ticket.updated_at)}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Updated</dt>
+              <dd className="text-sm text-[#111111]">{formatDateTime(ticket.updated_at)}</dd>
             </div>
           </dl>
           {ticketError ? <p className="mt-2 text-sm text-red-600">{ticketError}</p> : null}
@@ -756,10 +757,10 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
 function InlineEditorActions({ pending, onSave, onCancel }: { pending: boolean; onSave: () => void; onCancel: () => void }) {
   return (
     <div className="flex gap-2">
-      <button className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white" disabled={pending} onClick={onSave} type="button">
+      <button className="rounded-md bg-[#D9FF35] px-2.5 py-1 text-xs font-medium text-[#111111] hover:bg-[#cfe92f]" disabled={pending} onClick={onSave} type="button">
         {pending ? 'Saving...' : 'Save'}
       </button>
-      <button className="rounded-md border px-2.5 py-1 text-xs" onClick={onCancel} type="button">
+      <button className="rounded-md border border-[#808080]/50 px-2.5 py-1 text-xs text-[#4b4b4b] hover:bg-[#808080]/10" onClick={onCancel} type="button">
         Cancel
       </button>
     </div>
@@ -787,14 +788,14 @@ function EditableDetailRow({
 }) {
   return (
     <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</dt>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">{label}</dt>
       <dd>
         {isEditing ? (
           <div className="space-y-2">{children}<InlineEditorActions onCancel={onCancel} onSave={onSave} pending={pending} /></div>
         ) : (
           <button className="group inline-flex items-center gap-2 text-left" onClick={onEdit} type="button">
             {view}
-            <span className="text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">Edit</span>
+            <span className="text-xs text-[#808080] opacity-0 transition group-hover:opacity-100">Edit</span>
           </button>
         )}
       </dd>
