@@ -1,6 +1,9 @@
 'use client';
 
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
+
+import type { Json } from '@/lib/supabase/types';
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -34,6 +37,7 @@ type Ticket = {
   reporter_agent_id: string | null;
   due_at: string | null;
   labels: string[] | null;
+  context: Json | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -45,6 +49,19 @@ type TicketDetailClientProps = {
 };
 
 type ActivityTab = 'all' | 'comments' | 'history';
+
+type ReferencedTicket = {
+  id: string;
+  ticket_no: number | null;
+  title: string;
+};
+
+const STATUS_OPTIONS = ['open', 'in_progress', 'blocked', 'done'] as const;
+const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const;
+
+function isObject(value: Json | null): value is Record<string, Json> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 function formatDateTime(value: string | null) {
   if (!value) return '-';
@@ -121,8 +138,18 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
   const [commentError, setCommentError] = useState<string | null>(null);
   const [isCommentPending, startCommentTransition] = useTransition();
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [reporterFallback, setReporterFallback] = useState<string>('Unknown');
+  const [showReferencePanel, setShowReferencePanel] = useState(false);
+  const [referenceQuery, setReferenceQuery] = useState('');
+  const [referenceResults, setReferenceResults] = useState<ReferencedTicket[]>([]);
+  const [referenceSearchPending, setReferenceSearchPending] = useState(false);
+  const [referenceIds, setReferenceIds] = useState<string[]>([]);
+  const [referencedTickets, setReferencedTickets] = useState<ReferencedTicket[]>([]);
+  const [assigneeAgents, setAssigneeAgents] = useState<Agent[]>(agents);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const referenceSearchTimeoutRef = useRef<number | null>(null);
   const blurTimeoutRef = useRef<number | null>(null);
+  const initialContextRef = useRef<Record<string, Json>>(isObject(ticket.context) ? ticket.context : {});
   const [draftTicket, setDraftTicket] = useState({
     title: ticket.title,
     description: ticket.description ?? '',
@@ -135,14 +162,105 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
   });
 
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
+  const reporterLabel = agentById.get(ticket.reporter_agent_id ?? '')?.label ?? reporterFallback;
 
   useEffect(() => {
     return () => {
       if (blurTimeoutRef.current !== null) {
         window.clearTimeout(blurTimeoutRef.current);
       }
+      if (referenceSearchTimeoutRef.current !== null) {
+        window.clearTimeout(referenceSearchTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    const startingIds = Array.isArray(initialContextRef.current.referenced_ticket_ids)
+      ? initialContextRef.current.referenced_ticket_ids.filter((value): value is string => typeof value === 'string')
+      : [];
+    setReferenceIds(startingIds);
+  }, []);
+
+
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase
+      .from('mc_agents')
+      .select('id, display_name, department')
+      .eq('is_active', true)
+      .order('display_name', { ascending: true })
+      .then(({ data }) => {
+        const loaded = (data ?? [])
+          .map((agent) => ({
+            id: agent.id,
+            label: agent.display_name,
+            department: agent.department
+          }))
+          .filter((agent): agent is Agent => Boolean(agent.label));
+
+        if (loaded.length > 0) {
+          setAssigneeAgents(loaded);
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    if (ticket.reporter_agent_id) {
+      return;
+    }
+
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data }) => {
+      setReporterFallback(data.user?.email ?? 'Unknown');
+    });
+  }, [ticket.reporter_agent_id]);
+
+  useEffect(() => {
+    if (referenceIds.length === 0) {
+      setReferencedTickets([]);
+      return;
+    }
+
+    const supabase = createClient();
+    void supabase
+      .from('mc_tickets')
+      .select('id, ticket_no, title')
+      .in('id', referenceIds)
+      .then(({ data }) => {
+        const loaded = (data ?? []) as ReferencedTicket[];
+        const orderMap = new Map(loaded.map((ticketItem) => [ticketItem.id, ticketItem]));
+        setReferencedTickets(referenceIds.map((id) => orderMap.get(id)).filter((value): value is ReferencedTicket => Boolean(value)));
+      });
+  }, [referenceIds]);
+
+  useEffect(() => {
+    if (!showReferencePanel) return;
+
+    if (referenceSearchTimeoutRef.current !== null) {
+      window.clearTimeout(referenceSearchTimeoutRef.current);
+    }
+
+    referenceSearchTimeoutRef.current = window.setTimeout(() => {
+      const supabase = createClient();
+      setReferenceSearchPending(true);
+      void supabase
+        .from('mc_tickets')
+        .select('id, ticket_no, title, status')
+        .neq('id', ticket.id)
+        .not('status', 'in', '(done,closed)')
+        .or(`title.ilike.%${referenceQuery}%,ticket_no::text.ilike.%${referenceQuery}%`)
+        .order('updated_at', { ascending: false })
+        .limit(10)
+        .then(({ data }) => {
+          const loaded = ((data ?? []) as Array<ReferencedTicket & { status: string | null }>).filter(
+            (item) => !referenceIds.includes(item.id)
+          );
+          setReferenceResults(loaded.map(({ id, ticket_no, title }) => ({ id, ticket_no, title })));
+        })
+        .finally(() => setReferenceSearchPending(false));
+    }, 250);
+  }, [referenceIds, referenceQuery, showReferencePanel, ticket.id]);
 
   const loadMentionAgents = async () => {
     if (hasLoadedMentionAgents) return mentionAgents;
@@ -346,6 +464,13 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
         patch.labels = parsed;
       }
 
+      if (field === 'context') {
+        patch.context = {
+          ...initialContextRef.current,
+          referenced_ticket_ids: referenceIds
+        };
+      }
+
       const result = await updateTicketFields({
         ticketId: ticket.id,
         patch
@@ -357,6 +482,30 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
       }
 
       setEditingField(null);
+    });
+  };
+
+  const saveReferences = (nextIds: string[]) => {
+    setReferenceIds(nextIds);
+    startTicketTransition(async () => {
+      const nextContext: Record<string, Json> = {
+        ...initialContextRef.current,
+        referenced_ticket_ids: nextIds
+      };
+      const result = await updateTicketFields({
+        ticketId: ticket.id,
+        patch: {
+          context: nextContext
+        }
+      });
+
+      if (result.error) {
+        setTicketError(result.error);
+        return;
+      }
+
+      initialContextRef.current = nextContext;
+      setTicketError(null);
     });
   };
 
@@ -618,91 +767,153 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
             <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
               <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Status</dt>
               <dd>
-                {editingField === 'status' ? (
-                  <div className="space-y-2">
-                    <input
-                      className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
-                      onChange={(event) => setDraftTicket((prev) => ({ ...prev, status: event.target.value }))}
-                      value={draftTicket.status}
-                    />
-                    <InlineEditorActions onCancel={cancelEditField} onSave={() => saveField('status')} pending={isTicketPending} />
-                  </div>
-                ) : (
-                  <button className="group inline-flex items-center gap-2 text-[#111111]" onClick={() => startEditField('status')} type="button">
-                    <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusPillClasses(ticket.status)}`}>
-                      {ticket.status ?? 'Unset'}
-                    </span>
-                    <span className="text-xs text-[#808080] opacity-0 transition group-hover:opacity-100">Edit</span>
-                  </button>
-                )}
+                <select
+                  className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
+                  defaultValue={ticket.status ?? 'open'}
+                  disabled={isTicketPending}
+                  onChange={(event) => {
+                    setDraftTicket((prev) => ({ ...prev, status: event.target.value }));
+                    startTicketTransition(async () => {
+                      const result = await updateTicketFields({
+                        ticketId: ticket.id,
+                        patch: { status: event.target.value }
+                      });
+                      if (result.error) {
+                        setTicketError(result.error);
+                      }
+                    });
+                  }}
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
               </dd>
             </div>
 
-            <EditableDetailRow
-              isEditing={editingField === 'priority'}
-              label="Priority"
-              onCancel={cancelEditField}
-              onEdit={() => startEditField('priority')}
-              onSave={() => saveField('priority')}
-              pending={isTicketPending}
-              view={
-                <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${priorityPillClasses(ticket.priority)}`}>
-                  {ticket.priority ?? 'Unset'}
-                </span>
-              }
-            >
-              <input
-                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
-                onChange={(event) => setDraftTicket((prev) => ({ ...prev, priority: event.target.value }))}
-                value={draftTicket.priority}
-              />
-            </EditableDetailRow>
+            <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Priority</dt>
+              <dd>
+                <select
+                  className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
+                  defaultValue={ticket.priority ?? 'medium'}
+                  disabled={isTicketPending}
+                  onChange={(event) => {
+                    setDraftTicket((prev) => ({ ...prev, priority: event.target.value }));
+                    startTicketTransition(async () => {
+                      const result = await updateTicketFields({
+                        ticketId: ticket.id,
+                        patch: { priority: event.target.value }
+                      });
+                      if (result.error) {
+                        setTicketError(result.error);
+                      }
+                    });
+                  }}
+                >
+                  {PRIORITY_OPTIONS.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </select>
+              </dd>
+            </div>
 
-            <EditableDetailRow
-              isEditing={editingField === 'owner_agent_id'}
-              label="Assignee"
-              onCancel={cancelEditField}
-              onEdit={() => startEditField('owner_agent_id')}
-              onSave={() => saveField('owner_agent_id')}
-              pending={isTicketPending}
-              view={<ReadOnlyValue value={agentById.get(ticket.owner_agent_id ?? '')?.label ?? 'Unassigned'} />}
-            >
+            <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Assignee</dt>
+              <dd>
               <select
                 className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
-                onChange={(event) => setDraftTicket((prev) => ({ ...prev, owner_agent_id: event.target.value }))}
-                value={draftTicket.owner_agent_id}
+                defaultValue={ticket.owner_agent_id ?? ''}
+                disabled={isTicketPending}
+                onChange={(event) => {
+                  setDraftTicket((prev) => ({ ...prev, owner_agent_id: event.target.value }));
+                  startTicketTransition(async () => {
+                    const result = await updateTicketFields({
+                      ticketId: ticket.id,
+                      patch: { owner_agent_id: event.target.value || null }
+                    });
+                    if (result.error) {
+                      setTicketError(result.error);
+                    }
+                  });
+                }}
               >
                 <option value="">Unassigned</option>
-                {agents.map((agent) => (
+                {assigneeAgents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
                     {agent.label}
                   </option>
                 ))}
               </select>
-            </EditableDetailRow>
+              </dd>
+            </div>
 
-            <EditableDetailRow
-              isEditing={editingField === 'reporter_agent_id'}
-              label="Reporter"
-              onCancel={cancelEditField}
-              onEdit={() => startEditField('reporter_agent_id')}
-              onSave={() => saveField('reporter_agent_id')}
-              pending={isTicketPending}
-              view={<ReadOnlyValue value={agentById.get(ticket.reporter_agent_id ?? '')?.label ?? 'Unknown'} />}
-            >
-              <select
-                className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
-                onChange={(event) => setDraftTicket((prev) => ({ ...prev, reporter_agent_id: event.target.value }))}
-                value={draftTicket.reporter_agent_id}
-              >
-                <option value="">Unknown</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.label}
-                  </option>
-                ))}
-              </select>
-            </EditableDetailRow>
+            <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">Reporter</dt>
+              <dd className="text-sm text-[#111111]">{reporterLabel}</dd>
+            </div>
+
+            <div className="grid grid-cols-[120px_1fr] items-start gap-3 py-2.5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#808080]">References</dt>
+              <dd className="space-y-2">
+                <button className="text-xs font-medium text-[#4b4b4b] underline" onClick={() => setShowReferencePanel((prev) => !prev)} type="button">
+                  Reference other tickets
+                </button>
+                <div className="flex flex-wrap gap-2">
+                  {referencedTickets.length === 0 ? (
+                    <span className="text-sm text-[#808080]">-</span>
+                  ) : (
+                    referencedTickets.map((reference) => (
+                      <span key={reference.id} className="inline-flex items-center gap-1 rounded-full border border-[#808080]/40 bg-white px-2 py-1 text-xs text-[#111111]">
+                        <Link className="hover:underline" href={`/tickets/${reference.id}`}>
+                          #{reference.ticket_no ?? '-'} {reference.title}
+                        </Link>
+                        <button
+                          aria-label={`Remove reference ${reference.title}`}
+                          className="text-[#808080] hover:text-[#111111]"
+                          onClick={() => saveReferences(referenceIds.filter((id) => id !== reference.id))}
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                {showReferencePanel ? (
+                  <div className="space-y-2 rounded-md border border-[#808080]/30 p-2">
+                    <input
+                      className="w-full rounded-md border border-[#808080]/50 px-2 py-1.5 text-sm text-[#111111] outline-none focus:ring-2 focus:ring-[#D9FF35]"
+                      onChange={(event) => setReferenceQuery(event.target.value.trim())}
+                      placeholder="Search open tickets..."
+                      value={referenceQuery}
+                    />
+                    <div className="max-h-48 space-y-1 overflow-auto">
+                      {referenceSearchPending ? (
+                        <p className="text-xs text-[#808080]">Searching...</p>
+                      ) : referenceResults.length === 0 ? (
+                        <p className="text-xs text-[#808080]">No open tickets found.</p>
+                      ) : (
+                        referenceResults.map((result) => (
+                          <button
+                            key={result.id}
+                            className="block w-full rounded px-2 py-1 text-left text-sm text-[#111111] hover:bg-[#808080]/10"
+                            onClick={() => saveReferences([...referenceIds, result.id])}
+                            type="button"
+                          >
+                            #{result.ticket_no ?? '-'} {result.title}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </dd>
+            </div>
 
             <EditableDetailRow
               isEditing={editingField === 'due_at'}
