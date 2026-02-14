@@ -12,6 +12,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TicketTable } from '@/components/ui/ticket-table';
 import type { TicketRowItem } from '@/components/ui/ticket-row';
 
+
+type TicketWithAgents = {
+  id: string;
+  title: string;
+  status: string;
+  owner_agent_id: string | null;
+  reporter_agent_id: string | null;
+  updated_at: string;
+  owner: { id: string; display_name: string | null }[] | null;
+  reporter: { id: string; display_name: string | null }[] | null;
+};
+
 async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -21,7 +33,7 @@ async function fetchTickets() {
     )
     .order('updated_at', { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as TicketWithAgents[];
 }
 
 const relativeTime = (dateValue: string) => {
@@ -34,6 +46,14 @@ const relativeTime = (dateValue: string) => {
   if (Math.abs(diffHours) < 24) return formatter.format(diffHours, 'hour');
   const diffDays = Math.round(diffHours / 24);
   return formatter.format(diffDays, 'day');
+};
+
+
+const normalizeStatus = (status: string): TicketRowItem['status'] => {
+  if (status === 'ongoing' || status === 'done' || status === 'not_done') {
+    return status;
+  }
+  return 'not_done';
 };
 
 const choosePriority = (status: string): TicketRowItem['priority'] => {
@@ -79,9 +99,9 @@ export default function TicketsPage() {
       id: ticket.id,
       issueKey: `MC-${String(index + 101)}`,
       summary: ticket.title,
-      status: ticket.status,
-      assignee: ticket.owner?.display_name ?? ticket.owner_agent_id ?? 'Unassigned',
-      reporter: ticket.reporter?.display_name ?? ticket.reporter_agent_id ?? 'System',
+      status: normalizeStatus(ticket.status),
+      assignee: ticket.owner?.[0]?.display_name ?? ticket.owner_agent_id ?? 'Unassigned',
+      reporter: ticket.reporter?.[0]?.display_name ?? ticket.reporter_agent_id ?? 'System',
       parent: null,
       updatedLabel: relativeTime(ticket.updated_at),
       priority: choosePriority(ticket.status)

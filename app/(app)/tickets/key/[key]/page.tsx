@@ -11,7 +11,7 @@ export default async function TicketKeyRedirectPage({ params }: { params: { key:
     .ilike('title', `%${key}%`)
     .order('updated_at', { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle<{ id: string }>();
 
   if (data?.id) {
     redirect(`/tickets/${data.id}`);

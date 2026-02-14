@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-ui: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: 'Space Grotesk', 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --background: 0 0% 100%;
   --foreground: 143 31% 20%;
   --primary: 71 100% 60%;
