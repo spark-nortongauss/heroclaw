@@ -1,17 +1,21 @@
+// app/api/auth/magic-link/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_EMAIL_REGEX = /^[a-z0-9._%+-]+@nortongauss\.com$/i;
 const DOMAIN_RESTRICTION_MESSAGE =
   "Please use a valid @nortongauss.com email address.";
+
 const DEFAULT_REDIRECT_PATH = "/tickets";
 
 function getRequestOrigin(request: Request) {
   const requestUrl = new URL(request.url);
 
+  // Prefer the Origin header (browser requests)
   const originHeader = request.headers.get("origin");
   if (originHeader) return originHeader;
 
+  // Vercel / proxy headers
   const forwardedHost = request.headers.get("x-forwarded-host");
   if (forwardedHost) {
     const forwardedProto =
@@ -20,6 +24,7 @@ function getRequestOrigin(request: Request) {
     return `${forwardedProto}://${forwardedHost}`;
   }
 
+  // Fallback
   return requestUrl.origin;
 }
 
@@ -39,20 +44,31 @@ export async function POST(request: Request) {
 
   const origin = getRequestOrigin(request);
 
-  // IMPORTANT: Supabase must be allowed to redirect to this exact path (query params are fine).
+  // Must match a Redirect URL allowed in Supabase Auth settings (path matters)
+  // Example result: https://heroclaw.nortongauss.com/auth/callback?next=%2Ftickets
   const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent(
     DEFAULT_REDIRECT_PATH
   )}`;
 
-  // IMPORTANT: Do NOT use PKCE here (this is a server route; no client code_verifier exists).
+  // IMPORTANT: Because this is a SERVER route, we force implicit flow.
+  // PKCE requires a browser-stored code_verifier, which does NOT exist here.
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        flowType: "implicit",
+      },
+    }
   );
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo },
+    options: {
+      emailRedirectTo,
+      // (optional) if you ever use OTP instead of link, you can set shouldCreateUser, etc.
+      // shouldCreateUser: true,
+    },
   });
 
   if (error) {
