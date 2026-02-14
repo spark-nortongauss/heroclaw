@@ -20,8 +20,8 @@ type TicketWithAgents = {
   owner_agent_id: string | null;
   reporter_agent_id: string | null;
   updated_at: string;
-  owner: { id: string; display_name: string | null }[] | null;
-  reporter: { id: string; display_name: string | null }[] | null;
+  owner_name: string | null;
+  reporter_name: string | null;
 };
 
 async function fetchTickets() {
@@ -29,11 +29,26 @@ async function fetchTickets() {
   const { data, error } = await supabase
     .from('mc_tickets')
     .select(
-      'id, title, status, owner_agent_id, reporter_agent_id, updated_at, owner:mc_agents!mc_tickets_owner_agent_id_fkey(id, display_name), reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(id, display_name)'
+      'id, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)'
     )
     .order('updated_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []) as unknown as TicketWithAgents[];
+
+  return ((data ?? []) as Array<
+    Omit<TicketWithAgents, 'owner_name' | 'reporter_name'> & {
+      owner_agent: { display_name: string | null } | null;
+      reporter_agent: { display_name: string | null } | null;
+    }
+  >).map((ticket) => ({
+    id: ticket.id,
+    title: ticket.title,
+    status: ticket.status,
+    owner_agent_id: ticket.owner_agent_id,
+    reporter_agent_id: ticket.reporter_agent_id,
+    updated_at: ticket.updated_at,
+    owner_name: ticket.owner_agent?.display_name ?? null,
+    reporter_name: ticket.reporter_agent?.display_name ?? null
+  }));
 }
 
 const relativeTime = (dateValue: string) => {
@@ -105,8 +120,8 @@ export default function TicketsPage() {
       issueKey: `MC-${String(index + 101)}`,
       summary: ticket.title,
       status: normalizeStatus(ticket.status),
-      assignee: ticket.owner?.[0]?.display_name ?? '-',
-      reporter: ticket.reporter?.[0]?.display_name ?? '-',
+      assignee: ticket.owner_name ?? 'Unassigned',
+      reporter: ticket.reporter_name ?? 'Unknown',
       parent: null,
       updatedLabel: relativeTime(ticket.updated_at),
       priority: choosePriority(ticket.status)
