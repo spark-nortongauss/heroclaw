@@ -8,6 +8,8 @@ const DOMAIN_RESTRICTION_MESSAGE =
 
 const DEFAULT_REDIRECT_PATH = "/tickets";
 
+export const runtime = "nodejs";
+
 function getRequestOrigin(request: Request) {
   const requestUrl = new URL(request.url);
 
