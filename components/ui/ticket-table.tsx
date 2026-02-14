@@ -9,6 +9,10 @@ export function TicketTable({
   loading,
   selectedId,
   onSelect,
+  selectedIds,
+  allVisibleSelected,
+  onToggleSelectAll,
+  onToggleTicket,
   attachmentCounts,
   loadingAttachmentIds,
   onAttachmentHover,
@@ -18,6 +22,10 @@ export function TicketTable({
   loading?: boolean;
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  selectedIds?: string[];
+  allVisibleSelected?: boolean;
+  onToggleSelectAll?: (checked: boolean) => void;
+  onToggleTicket?: (id: string, checked: boolean) => void;
   attachmentCounts?: Record<string, number>;
   loadingAttachmentIds?: Record<string, boolean>;
   onAttachmentHover?: (id: string) => void;
@@ -28,6 +36,14 @@ export function TicketTable({
       <Table>
         <TableHead>
           <tr className="sticky top-0 z-10 bg-[#F4F5F7] text-xs uppercase tracking-wide text-[#6B778C]">
+            <TableHeaderCell className="w-10">
+              <input
+                type="checkbox"
+                aria-label="Select all tickets"
+                checked={Boolean(allVisibleSelected)}
+                onChange={(event) => onToggleSelectAll?.(event.target.checked)}
+              />
+            </TableHeaderCell>
             <TableHeaderCell>Issue key</TableHeaderCell>
             <TableHeaderCell>Summary</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
@@ -42,14 +58,14 @@ export function TicketTable({
         <TableBody>
           {loading && (
             <tr>
-              <TableCell colSpan={9}>
+              <TableCell colSpan={10}>
                 <Skeleton className="h-10 w-full" />
               </TableCell>
             </tr>
           )}
           {!loading && tickets.length === 0 && (
             <tr>
-              <TableCell colSpan={9} className="text-center text-sm text-mutedForeground">
+              <TableCell colSpan={10} className="text-center text-sm text-mutedForeground">
                 No tickets found.
               </TableCell>
             </tr>
@@ -60,6 +76,8 @@ export function TicketTable({
               ticket={ticket}
               selected={ticket.id === selectedId}
               onSelect={onSelect}
+              selectedForDelete={Boolean(selectedIds?.includes(ticket.id))}
+              onSelectForDelete={(checked) => onToggleTicket?.(ticket.id, checked)}
               attachmentCount={attachmentCounts?.[ticket.id]}
               attachmentLoading={Boolean(loadingAttachmentIds?.[ticket.id])}
               onAttachmentHover={onAttachmentHover}
