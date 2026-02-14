@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { signInWithPassword, signUpWithPassword } from "@/app/login/actions";
+import { signInWithPassword } from "@/app/login/actions";
 
 const initialState: { error?: string; success?: string } = {};
 
@@ -20,7 +20,6 @@ function SubmitButton({ label }: { label: string }) {
 
 export default function LoginClient({ routeError }: { routeError: string | null }) {
   const [signInState, signInAction] = useFormState(signInWithPassword as any, initialState);
-  const [signUpState, signUpAction] = useFormState(signUpWithPassword as any, initialState);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-10">
@@ -56,35 +55,6 @@ export default function LoginClient({ routeError }: { routeError: string | null 
         {signInState?.success ? <p className="text-sm text-green-700">{signInState.success}</p> : null}
 
         <SubmitButton label="Sign in" />
-      </form>
-
-      <form action={signUpAction} className="mt-4 space-y-3 rounded-lg border p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-          Create account
-        </h2>
-
-        <input
-          type="email"
-          name="email"
-          required
-          autoComplete="email"
-          placeholder="you@nortongauss.com"
-          className="w-full rounded-md border px-3 py-2"
-        />
-
-        <input
-          type="password"
-          name="password"
-          required
-          autoComplete="new-password"
-          placeholder="New password"
-          className="w-full rounded-md border px-3 py-2"
-        />
-
-        {signUpState?.error ? <p className="text-sm text-red-600">{signUpState.error}</p> : null}
-        {signUpState?.success ? <p className="text-sm text-green-700">{signUpState.success}</p> : null}
-
-        <SubmitButton label="Create account" />
       </form>
     </main>
   );
