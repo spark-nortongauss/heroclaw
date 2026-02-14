@@ -10,6 +10,100 @@ type CreateCommentInput = {
   mentionsAgentIds: string[];
 };
 
+type TicketPatchInput = {
+  ticketId: string;
+  patch: {
+    status?: string | null;
+    priority?: string | null;
+    title?: string;
+    description?: string | null;
+    owner_agent_id?: string | null;
+    reporter_agent_id?: string | null;
+    due_at?: string | null;
+    labels?: string[];
+  };
+};
+
+export async function updateTicketFields({ ticketId, patch }: TicketPatchInput) {
+  const supabase = createSupabaseServerClient();
+
+  const allowedPatch: Record<string, unknown> = {};
+  const allowedKeys = [
+    'status',
+    'priority',
+    'title',
+    'description',
+    'owner_agent_id',
+    'reporter_agent_id',
+    'due_at',
+    'labels'
+  ] as const;
+
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) {
+      if (key === 'title') {
+        const value = (patch[key] ?? '').toString().trim();
+        if (!value) {
+          return { error: 'Title cannot be empty.' };
+        }
+        allowedPatch[key] = value;
+        continue;
+      }
+
+      if (key === 'labels') {
+        const value = patch[key];
+        allowedPatch[key] = Array.isArray(value) ? value : [];
+        continue;
+      }
+
+      allowedPatch[key] = patch[key] ?? null;
+    }
+  }
+
+  if (Object.keys(allowedPatch).length === 0) {
+    return { error: 'No valid fields to update.' };
+  }
+
+  const { error } = await supabase.from('mc_tickets').update(allowedPatch).eq('id', ticketId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/tickets/${ticketId}`);
+  return { error: null };
+}
+
+export async function updateComment({
+  ticketId,
+  commentId,
+  body
+}: {
+  ticketId: string;
+  commentId: string;
+  body: string;
+}) {
+  const trimmedBody = body.trim();
+
+  if (!trimmedBody) {
+    return { error: 'Comment cannot be empty.' };
+  }
+
+  const supabase = createSupabaseServerClient();
+
+  const { error } = await (supabase as any)
+    .from('mc_ticket_comments')
+    .update({ body: trimmedBody })
+    .eq('id', commentId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/tickets/${ticketId}`);
+  return { error: null };
+}
+
 export async function createTicketComment({ ticketId, body, mentionsAgentIds }: CreateCommentInput) {
   const trimmedBody = body.trim();
 
