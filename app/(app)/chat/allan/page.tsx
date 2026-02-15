@@ -39,6 +39,7 @@ export default function AllanChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -97,22 +98,59 @@ export default function AllanChatPage() {
       return;
     }
 
-    const base = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL!;
-    const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN!;
-    const url = new URL(base);
-    url.searchParams.set("token", token);
-    const socket = new WebSocket(url.toString());
+    const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN?.trim();
+    if (!token) {
+      setError('Missing NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN');
+      return;
+    }
+
+    const socket = new WebSocket(gatewayUrl);
     socketRef.current = socket;
+    setConnected(false);
+
+    const toHex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+    const signNonce = async (nonce: string) => {
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', encoder.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(nonce));
+      return toHex(new Uint8Array(signature));
+    };
 
     socket.onopen = () => {
+      console.debug('[Allan WS] socket open');
       setError(null);
     };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = async (event) => {
       const payload = typeof event.data === 'string' ? event.data : '';
 
       try {
-        const data = JSON.parse(payload) as { reply?: string; message?: string; text?: string; body?: string };
+        const data = JSON.parse(payload) as {
+          type?: string;
+          event?: string;
+          payload?: { nonce?: string };
+          reply?: string;
+          message?: string;
+          text?: string;
+          body?: string;
+        };
+
+        if (data.event === 'connect.challenge' && data.payload?.nonce) {
+          console.debug('[Allan WS] challenge received');
+          const nonce = data.payload.nonce;
+          const sig = await signNonce(nonce);
+          socket.send(JSON.stringify({ type: 'event', event: 'connect.response', payload: { nonce, sig } }));
+          console.debug('[Allan WS] challenge response sent');
+          return;
+        }
+
+        if (['connect.ok', 'connect.connected', 'connect.ready'].includes(data.event || '')) {
+          console.debug('[Allan WS] connected event received', data.event);
+          setConnected(true);
+          return;
+        }
+
         const reply = data.reply || data.message || data.text || data.body;
 
         if (reply) {
@@ -127,15 +165,23 @@ export default function AllanChatPage() {
     };
 
     socket.onerror = () => {
+      console.debug('[Allan WS] socket error');
       setError('WebSocket connection error');
     };
 
     socket.onclose = () => {
+      console.debug('[Allan WS] socket close');
+      setConnected(false);
       socketRef.current = null;
     };
 
     return () => {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
       socket.close();
+      setConnected(false);
       socketRef.current = null;
     };
   }, [gatewayUrl]);
@@ -156,7 +202,7 @@ export default function AllanChatPage() {
     try {
       const socket = socketRef.current;
 
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (!socket || socket.readyState !== WebSocket.OPEN || !connected) {
         throw new Error('WebSocket is not connected');
       }
 
