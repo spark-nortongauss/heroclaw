@@ -181,35 +181,36 @@ export default function AllanChatPage() {
         };
 
         // Challenge => respond ONCE
-        if (data.event === 'connect.challenge' && data.payload?.nonce) {
-          setStatus('Auth challenge received; signing…');
+       if (data.event === 'connect.challenge' && data.payload?.nonce) {
+  setStatus('Auth challenge received; signing…');
 
-          const nonce = data.payload.nonce;
-          const sig = await signNonceBoth(nonce);
+  const nonce = data.payload.nonce;
 
-          // Send ONE response including both common field names and both formats.
-          // This stops the “sig vs signature” and “hex vs base64url” guessing.
-          socket.send(
-            JSON.stringify({
-              type: 'event',
-              event: 'connect.response',
-              payload: {
-                nonce,
-                // common names
-                sig: sig.b64url,
-                signature: sig.b64url,
-                // explicit formats (in case gateway expects hex)
-                sig_hex: sig.hex,
-                signature_hex: sig.hex,
-                sig_b64url: sig.b64url,
-                signature_b64url: sig.b64url
-              }
-            })
-          );
+  // HMAC-SHA256(token, nonce) -> HEX
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(token),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(nonce));
+  const sigHex = Array.from(new Uint8Array(sigBuf), (b) => b.toString(16).padStart(2, '0')).join('');
 
-          setStatus('Auth response sent; waiting for connect.ok…');
-          return;
-        }
+  // ✅ Send ONE minimal frame (no extra fields)
+  socket.send(
+    JSON.stringify({
+      type: 'event',
+      event: 'connect.response',
+      payload: { nonce, sig: sigHex }
+    })
+  );
+
+  setStatus('Auth response sent; waiting for connect.ok…');
+  return;
+}
+
 
         // Treat ANY connect.* “ok/ready/connected” as success
         if (
