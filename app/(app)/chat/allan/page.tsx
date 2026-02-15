@@ -43,25 +43,24 @@ export default function AllanChatPage() {
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const gatewayUrl = useMemo(() => {
+
+  // Keep gatewayUrl as the BASE URL only (no token here).
+  // Example env: wss://gw.nortongauss.com
+  const gatewayBaseUrl = useMemo(() => {
     const rawUrl = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL?.trim();
-    const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN?.trim();
     if (!rawUrl) return null;
 
     try {
       const url = new URL(rawUrl);
 
-      if (url.protocol === 'http:' || url.protocol === 'https:') {
-        url.protocol = 'wss:';
-      }
-
-      if (!url.searchParams.has('token') && token) {
-        url.searchParams.set('token', token);
-      }
+      if (url.protocol === 'http:' || url.protocol === 'https:') url.protocol = 'wss:';
+      if (url.protocol === 'ws:') url.protocol = 'wss:';
 
       return url.toString();
     } catch {
-      return null;
+      // If it's not parseable, still try to normalize basic ws->wss
+      if (rawUrl.startsWith('ws://')) return rawUrl.replace(/^ws:\/\//, 'wss://');
+      return rawUrl;
     }
   }, []);
 
@@ -82,14 +81,10 @@ export default function AllanChatPage() {
         const params = latestTimestamp ? `?since=${encodeURIComponent(latestTimestamp)}` : '';
         const response = await fetch(`/api/allan-chat/history${params}`, { cache: 'no-store' });
 
-        if (!response.ok) {
-          return;
-        }
+        if (!response.ok) return;
 
         const data = (await response.json()) as { messages?: Message[] };
-        if (stopped || !Array.isArray(data.messages) || !data.messages.length) {
-          return;
-        }
+        if (stopped || !Array.isArray(data.messages) || !data.messages.length) return;
 
         setMessages((prev) => mergeMessages(prev, data.messages || []));
       } catch {
@@ -106,38 +101,59 @@ export default function AllanChatPage() {
     };
   }, [latestTimestamp]);
 
+  // ✅ WebSocket connection + handshake (token in URL query param)
   useEffect(() => {
-    if (!gatewayUrl) {
+    if (!gatewayBaseUrl) {
       setError('Missing NEXT_PUBLIC_OPENCLAW_GATEWAY_URL');
+      setConnected(false);
       return;
     }
 
     const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN?.trim();
     if (!token) {
       setError('Missing NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN');
+      setConnected(false);
       return;
     }
 
-    const socket = new WebSocket(gatewayUrl);
+    // Build ws URL with ?token=... (this is what your Network tab should show)
+    let wsUrl = gatewayBaseUrl;
+    try {
+      const u = new URL(gatewayBaseUrl);
+      if (!u.searchParams.has('token')) u.searchParams.set('token', token);
+      wsUrl = u.toString();
+    } catch {
+      // If base isn't parseable, append token anyway
+      wsUrl += (wsUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    }
+
+    const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
     setConnected(false);
 
+    // HMAC-SHA256(nonce, token) -> base64url
     const signNonce = async (nonce: string) => {
       const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey('raw', encoder.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(nonce));
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-      // Gateway expects Base64URL only for connect.challenge signatures.
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(token),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(nonce));
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
       return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     };
 
     socket.onopen = () => {
-      console.debug('[Allan WS] socket open');
+      // Not "connected" until we receive connect.ok/ready
       setError(null);
     };
 
     socket.onmessage = async (event) => {
       const payload = typeof event.data === 'string' ? event.data : '';
+      if (!payload) return;
 
       try {
         const data = JSON.parse(payload) as {
@@ -150,10 +166,12 @@ export default function AllanChatPage() {
           body?: string;
         };
 
+        // Challenge -> response
         if (data.type === 'event' && data.event === 'connect.challenge' && data.payload?.nonce) {
-          console.debug('[Allan WS] challenge received');
           const nonce = data.payload.nonce;
           const signature = await signNonce(nonce);
+
+          // IMPORTANT: send ONE response, and use the "signature" field
           socket.send(
             JSON.stringify({
               type: 'event',
@@ -161,37 +179,33 @@ export default function AllanChatPage() {
               payload: { nonce, signature }
             })
           );
-          console.debug('[Allan WS] challenge response sent');
           return;
         }
 
+        // Connected events
         if (data.type === 'event' && ['connect.ok', 'connect.connected', 'connect.ready'].includes(data.event || '')) {
-          console.debug('[Allan WS] connected event received', data.event);
           setConnected(true);
+          setError(null);
           return;
         }
 
+        // Normal replies
         const reply = data.reply || data.message || data.text || data.body;
-
         if (reply) {
           setMessages((prev) => [...prev, createMessage(reply, 'agent')]);
-          return;
         }
       } catch {
-        if (payload) {
-          setMessages((prev) => [...prev, createMessage(payload, 'agent')]);
-        }
+        // Non-JSON messages
+        setMessages((prev) => [...prev, createMessage(payload, 'agent')]);
       }
     };
 
     socket.onerror = () => {
-      console.debug('[Allan WS] socket error');
       setConnected(false);
       setError('WebSocket connection error');
     };
 
     socket.onclose = () => {
-      console.debug('[Allan WS] socket close');
       setConnected(false);
       socketRef.current = null;
     };
@@ -201,19 +215,19 @@ export default function AllanChatPage() {
       socket.onmessage = null;
       socket.onerror = null;
       socket.onclose = null;
-      socket.close();
+      try {
+        socket.close();
+      } catch {}
       setConnected(false);
       socketRef.current = null;
     };
-  }, [gatewayUrl]);
+  }, [gatewayBaseUrl]);
 
   const send = async (e: FormEvent) => {
     e.preventDefault();
     const message = body.trim();
 
-    if (!message || sending) {
-      return;
-    }
+    if (!message || sending) return;
 
     setError(null);
     setSending(true);
@@ -227,6 +241,7 @@ export default function AllanChatPage() {
         throw new Error('WebSocket is not connected');
       }
 
+      // Keep your current send format
       socket.send(JSON.stringify({ message }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send message');
@@ -244,17 +259,25 @@ export default function AllanChatPage() {
       <Card className="flex h-[calc(100vh-220px)] flex-col overflow-hidden">
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {messages.map((msg) => (
-            <div key={msg.id} className={`max-w-[72%] rounded-lg p-3 text-sm ${msg.sender_type === 'user' ? 'ml-auto bg-primary text-brandDark' : 'bg-muted'}`}>
+            <div
+              key={msg.id}
+              className={`max-w-[72%] rounded-lg p-3 text-sm ${
+                msg.sender_type === 'user' ? 'ml-auto bg-primary text-brandDark' : 'bg-muted'
+              }`}
+            >
               <p>{msg.body}</p>
               <p className="mt-1 text-xs opacity-75">{new Date(msg.created_at).toLocaleTimeString()}</p>
             </div>
           ))}
           <div ref={endRef} />
         </div>
+
         <form onSubmit={send} className="border-t p-3">
           <div className="flex gap-2">
             <Input value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message Allan..." required />
-            <Button type="submit" disabled={sending || !connected}>{sending ? 'Sending...' : 'Send'}</Button>
+            <Button type="submit" disabled={sending || !connected}>
+              {sending ? 'Sending...' : 'Send'}
+            </Button>
           </div>
           {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
         </form>
