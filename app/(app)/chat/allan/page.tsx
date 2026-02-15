@@ -108,13 +108,12 @@ export default function AllanChatPage() {
     socketRef.current = socket;
     setConnected(false);
 
-    const toHex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-
     const signNonce = async (nonce: string) => {
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey('raw', encoder.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
       const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(nonce));
-      return toHex(new Uint8Array(signature));
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+      return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     };
 
     socket.onopen = () => {
@@ -140,7 +139,7 @@ export default function AllanChatPage() {
           console.debug('[Allan WS] challenge received');
           const nonce = data.payload.nonce;
           const sig = await signNonce(nonce);
-          socket.send(JSON.stringify({ type: 'event', event: 'connect.response', payload: { nonce, sig } }));
+          socket.send(JSON.stringify({ type: 'event', event: 'connect.response', payload: { nonce, sig, signature: sig } }));
           console.debug('[Allan WS] challenge response sent');
           return;
         }
