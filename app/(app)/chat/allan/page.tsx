@@ -45,10 +45,24 @@ export default function AllanChatPage() {
   const endRef = useRef<HTMLDivElement>(null);
   const gatewayUrl = useMemo(() => {
     const rawUrl = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL?.trim();
+    const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN?.trim();
     if (!rawUrl) return null;
-    if (rawUrl.startsWith('wss://')) return rawUrl;
-    if (rawUrl.startsWith('https://')) return `wss://${rawUrl.slice('https://'.length)}`;
-    return rawUrl.replace(/^ws:\/\//, 'wss://');
+
+    try {
+      const url = new URL(rawUrl);
+
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        url.protocol = 'wss:';
+      }
+
+      if (!url.searchParams.has('token') && token) {
+        url.searchParams.set('token', token);
+      }
+
+      return url.toString();
+    } catch {
+      return null;
+    }
   }, []);
 
   useEffect(() => {
@@ -139,12 +153,12 @@ export default function AllanChatPage() {
         if (data.type === 'event' && data.event === 'connect.challenge' && data.payload?.nonce) {
           console.debug('[Allan WS] challenge received');
           const nonce = data.payload.nonce;
-          const sig = await signNonce(nonce);
+          const signature = await signNonce(nonce);
           socket.send(
             JSON.stringify({
               type: 'event',
               event: 'connect.response',
-              payload: { nonce, sig, signature: sig }
+              payload: { nonce, signature }
             })
           );
           console.debug('[Allan WS] challenge response sent');
@@ -172,6 +186,7 @@ export default function AllanChatPage() {
 
     socket.onerror = () => {
       console.debug('[Allan WS] socket error');
+      setConnected(false);
       setError('WebSocket connection error');
     };
 
