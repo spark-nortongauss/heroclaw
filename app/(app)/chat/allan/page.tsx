@@ -35,6 +35,15 @@ function mergeMessages(existing: Message[], incoming: Message[]) {
   return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
+function toHex(bytes: Uint8Array) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function toBase64Url(bytes: Uint8Array) {
+  const base64 = btoa(String.fromCharCode(...bytes));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export default function AllanChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState('');
@@ -46,20 +55,27 @@ export default function AllanChatPage() {
   const socketRef = useRef<WebSocket | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // BASE gateway URL only (no token here)
-  // Example env: wss://gw.nortongauss.com
-  const gatewayBaseUrl = useMemo(() => {
-    const rawUrl = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL?.trim();
-    if (!rawUrl) return null;
+  // Build a WS URL that includes ?token=... (because your DevTools shows that pattern)
+  const gatewayUrl = useMemo(() => {
+    const raw = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_URL?.trim();
+    const token = process.env.NEXT_PUBLIC_OPENCLAW_GATEWAY_TOKEN?.trim();
+    if (!raw) return null;
 
+    // Normalize protocol
+    let base = raw;
+    if (base.startsWith('http://')) base = 'wss://' + base.slice('http://'.length);
+    if (base.startsWith('https://')) base = 'wss://' + base.slice('https://'.length);
+    if (base.startsWith('ws://')) base = 'wss://' + base.slice('ws://'.length);
+
+    // If URL parsable, set query token safely
     try {
-      const url = new URL(rawUrl);
-      if (url.protocol === 'http:' || url.protocol === 'https:') url.protocol = 'wss:';
-      if (url.protocol === 'ws:') url.protocol = 'wss:';
-      return url.toString();
+      const u = new URL(base);
+      if (token && !u.searchParams.has('token')) u.searchParams.set('token', token);
+      return u.toString();
     } catch {
-      if (rawUrl.startsWith('ws://')) return rawUrl.replace(/^ws:\/\//, 'wss://');
-      return rawUrl;
+      // Fallback: append token
+      if (!token) return base;
+      return base + (base.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
     }
   }, []);
 
@@ -72,7 +88,7 @@ export default function AllanChatPage() {
     return messages[messages.length - 1]?.created_at;
   }, [messages]);
 
-  // Polling history (non-blocking fallback)
+  // Polling history (non-blocking)
   useEffect(() => {
     let stopped = false;
 
@@ -100,9 +116,9 @@ export default function AllanChatPage() {
     };
   }, [latestTimestamp]);
 
-  // WebSocket + handshake
+  // WebSocket + challenge-response auth
   useEffect(() => {
-    if (!gatewayBaseUrl) {
+    if (!gatewayUrl) {
       setError('Missing NEXT_PUBLIC_OPENCLAW_GATEWAY_URL');
       setConnected(false);
       setStatus('Missing gateway URL');
@@ -117,16 +133,14 @@ export default function AllanChatPage() {
       return;
     }
 
-    // IMPORTANT: connect to base URL (no ?token=...); auth is sent in connect.params.auth.token
-    const socket = new WebSocket(gatewayBaseUrl);
-    socketRef.current = socket;
-
-    setConnected(false);
     setError(null);
+    setConnected(false);
     setStatus('Connecting…');
 
-    // HMAC-SHA256(nonce, token) -> base64url (used if gateway sends connect.challenge)
-    const signNonce = async (nonce: string) => {
+    const socket = new WebSocket(gatewayUrl);
+    socketRef.current = socket;
+
+    const signNonceBoth = async (nonce: string) => {
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
@@ -136,34 +150,26 @@ export default function AllanChatPage() {
         ['sign']
       );
       const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(nonce));
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-      return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const bytes = new Uint8Array(sigBuf);
+      return {
+        hex: toHex(bytes),
+        b64url: toBase64Url(bytes)
+      };
     };
 
     socket.onopen = () => {
       setError(null);
-      setStatus('WebSocket open; authenticating…');
-
-      // Kick off auth flow (as per: connect.params.auth.token)
-      try {
-        socket.send(
-          JSON.stringify({
-            type: 'connect',
-            params: { auth: { token } }
-          })
-        );
-      } catch (e) {
-        setError('Failed to send connect init');
-        setStatus('Auth init failed');
-      }
+      setStatus('WebSocket open; waiting for gateway authentication…');
+      // IMPORTANT: do NOT send a "connect" message here.
+      // Your gateway sends connect.challenge first (we respond then).
     };
 
     socket.onmessage = async (event) => {
-      const payload = typeof event.data === 'string' ? event.data : '';
-      if (!payload) return;
+      const raw = typeof event.data === 'string' ? event.data : '';
+      if (!raw) return;
 
       try {
-        const data = JSON.parse(payload) as {
+        const data = JSON.parse(raw) as {
           type?: string;
           event?: string;
           payload?: { nonce?: string };
@@ -174,59 +180,80 @@ export default function AllanChatPage() {
           error?: string;
         };
 
-        // Some gateway builds omit "type", so key off event name
+        // Challenge => respond ONCE
         if (data.event === 'connect.challenge' && data.payload?.nonce) {
-          setStatus('Auth challenge received…');
-          const nonce = data.payload.nonce;
-          const signature = await signNonce(nonce);
+          setStatus('Auth challenge received; signing…');
 
-          // Send ONE response (use "signature")
+          const nonce = data.payload.nonce;
+          const sig = await signNonceBoth(nonce);
+
+          // Send ONE response including both common field names and both formats.
+          // This stops the “sig vs signature” and “hex vs base64url” guessing.
           socket.send(
             JSON.stringify({
               type: 'event',
               event: 'connect.response',
-              payload: { nonce, signature }
+              payload: {
+                nonce,
+                // common names
+                sig: sig.b64url,
+                signature: sig.b64url,
+                // explicit formats (in case gateway expects hex)
+                sig_hex: sig.hex,
+                signature_hex: sig.hex,
+                sig_b64url: sig.b64url,
+                signature_b64url: sig.b64url
+              }
             })
           );
+
+          setStatus('Auth response sent; waiting for connect.ok…');
           return;
         }
 
-        // Connected events (accept even if type missing)
-        if (['connect.ok', 'connect.connected', 'connect.ready'].includes(data.event || '')) {
+        // Treat ANY connect.* “ok/ready/connected” as success
+        if (
+          data.event &&
+          ['connect.ok', 'connect.ready', 'connect.connected', 'connect.accepted', 'connect.success'].includes(data.event)
+        ) {
           setConnected(true);
           setError(null);
           setStatus('Authenticated ✓');
           return;
         }
 
-        // If gateway returns an explicit error event/message
-        if ((data.event && data.event.startsWith('connect.')) || data.error) {
-          setConnected(false);
-          setStatus('Authentication failed');
-          setError(data.error || `Gateway auth error: ${data.event}`);
+        // Some gateways may only send {event:"connect.ok"} without "type"
+        if (data.event && data.event.startsWith('connect.') && !connected) {
+          // If it’s a connect.* event but not one of the success ones, show it.
+          setStatus(`Gateway: ${data.event}`);
+          if (data.error) setError(data.error);
           return;
         }
 
         const reply = data.reply || data.message || data.text || data.body;
         if (reply) {
           setMessages((prev) => [...prev, createMessage(reply, 'agent')]);
+          return;
         }
       } catch {
         // Non-JSON messages
-        setMessages((prev) => [...prev, createMessage(payload, 'agent')]);
+        setMessages((prev) => [...prev, createMessage(raw, 'agent')]);
       }
     };
 
     socket.onerror = () => {
       setConnected(false);
-      setStatus('WebSocket error');
       setError('WebSocket connection error');
+      setStatus('WebSocket error');
     };
 
-    socket.onclose = () => {
+    socket.onclose = (ev) => {
       setConnected(false);
-      setStatus('Disconnected');
       socketRef.current = null;
+
+      // This is the key: we surface the REAL reason immediately.
+      const reason = ev.reason ? ` — ${ev.reason}` : '';
+      setStatus(`Disconnected (code ${ev.code})${reason}`);
     };
 
     return () => {
@@ -240,7 +267,7 @@ export default function AllanChatPage() {
       setConnected(false);
       socketRef.current = null;
     };
-  }, [gatewayBaseUrl]);
+  }, [gatewayUrl, connected]);
 
   const send = async (e: FormEvent) => {
     e.preventDefault();
@@ -259,7 +286,6 @@ export default function AllanChatPage() {
         throw new Error('WebSocket is not connected');
       }
 
-      // Keep your current send format
       socket.send(JSON.stringify({ message }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send message');
