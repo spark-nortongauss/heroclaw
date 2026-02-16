@@ -16,7 +16,8 @@ export function TicketTable({
   attachmentCounts,
   loadingAttachmentIds,
   onAttachmentHover,
-  onAttachmentClick
+  onAttachmentClick,
+  emptyText = 'No tickets found.'
 }: {
   tickets: TicketRowItem[];
   loading?: boolean;
@@ -30,6 +31,7 @@ export function TicketTable({
   loadingAttachmentIds?: Record<string, boolean>;
   onAttachmentHover?: (id: string) => void;
   onAttachmentClick?: (id: string) => void;
+  emptyText?: string;
 }) {
   return (
     <div className="overflow-auto rounded-xl border border-border bg-card">
@@ -66,7 +68,7 @@ export function TicketTable({
           {!loading && tickets.length === 0 && (
             <tr>
               <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
-                No tickets found.
+                {emptyText}
               </TableCell>
             </tr>
           )}

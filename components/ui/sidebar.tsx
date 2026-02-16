@@ -2,17 +2,19 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, FolderKanban, KanbanSquare, LayoutDashboard, MessageCircle, PanelLeftClose, Ticket, FolderOpen } from 'lucide-react';
+import { ChevronLeft, FolderKanban, KanbanSquare, LayoutDashboard, MessageCircle, Ticket, FolderOpen } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/components/providers/locale-provider';
+import type { TranslationKey } from '@/lib/i18n/messages';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/board', label: 'Board', icon: KanbanSquare },
-  { href: '/tickets', label: 'Tickets', icon: Ticket },
-  { href: '/chat/allan', label: 'Chat', icon: MessageCircle },
-  { href: '/project-files', label: 'Files', icon: FolderOpen }
+const navItems: Array<{ href: string; labelKey: TranslationKey; icon: typeof LayoutDashboard }> = [
+  { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { href: '/projects', labelKey: 'nav.projects', icon: FolderKanban },
+  { href: '/board', labelKey: 'nav.board', icon: KanbanSquare },
+  { href: '/tickets', labelKey: 'nav.tickets', icon: Ticket },
+  { href: '/chat/allan', labelKey: 'nav.chat', icon: MessageCircle },
+  { href: '/project-files', labelKey: 'nav.files', icon: FolderOpen }
 ];
 
 const isActiveRoute = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -30,6 +32,7 @@ export function Sidebar({
   onCloseMobile: () => void;
 }) {
   const pathname = usePathname();
+  const { t } = useLocale();
 
   return (
     <aside
@@ -66,6 +69,7 @@ export function Sidebar({
         {navItems.map((item) => {
           const active = isActiveRoute(pathname, item.href);
           const Icon = item.icon;
+          const label = t(item.labelKey);
 
           return (
             <Link
@@ -75,8 +79,8 @@ export function Sidebar({
                 onNavigate();
                 onCloseMobile();
               }}
-              aria-label={item.label}
-              title={collapsed ? item.label : undefined}
+              aria-label={label}
+              title={collapsed ? label : undefined}
               className={cn(
                 'sidebar-tooltip group relative flex items-center rounded-md px-2 py-2 text-sm outline-none transition-all duration-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-[#D9FF35]',
                 collapsed ? 'justify-center' : 'gap-2.5',
@@ -84,10 +88,10 @@ export function Sidebar({
               )}
             >
               <Icon className="h-4 w-4" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && <span>{label}</span>}
               {collapsed && (
                 <span className="pointer-events-none absolute left-full ml-2 -translate-x-1 rounded-md bg-[#172B4D] px-2 py-1 text-xs text-white opacity-0 shadow transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none">
-                  {item.label}
+                  {label}
                 </span>
               )}
             </Link>
@@ -97,7 +101,7 @@ export function Sidebar({
 
       <div className="mt-auto p-2 md:hidden">
         <button onClick={onCloseMobile} className="flex w-full items-center justify-center rounded-md bg-white/10 px-2 py-2 text-xs">
-          <ChevronLeft className="mr-1 h-4 w-4" /> Close
+          <ChevronLeft className="mr-1 h-4 w-4" /> {t('nav.close')}
         </button>
       </div>
     </aside>

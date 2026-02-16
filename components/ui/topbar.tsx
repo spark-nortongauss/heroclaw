@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ThemeSwitcher } from '@/components/layout/theme-switcher';
 import { NotificationBell } from '@/components/layout/notification-bell';
+import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { createClient } from '@/lib/supabase/client';
+import { useLocale } from '@/components/providers/locale-provider';
 
 export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: string; onOpenSidebar: () => void; onToggleSidebar: () => void }) {
   const router = useRouter();
+  const { t } = useLocale();
 
   const onLogout = async () => {
     const supabase = createClient();
@@ -29,10 +32,11 @@ export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: stri
       </div>
       <div className="flex items-center gap-3">
         <NotificationBell />
+        <LanguageSwitcher />
         <ThemeSwitcher />
         <span className="hidden rounded-full bg-muted px-3 py-1 text-xs text-mutedForeground md:inline-flex">{email ?? 'Unknown user'}</span>
         <Button variant="secondary" size="sm" onClick={onLogout} className="transition-colors hover:bg-muted">
-          Logout
+          {t('common.logout')}
         </Button>
       </div>
     </header>
