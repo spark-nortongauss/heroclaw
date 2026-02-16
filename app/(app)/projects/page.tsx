@@ -43,14 +43,12 @@ export default async function ProjectsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="h1 font-[var(--font-heading)]">Projects</h1>
-          <p className="text-body">Enterprise project portfolio with ticket workload visibility.</p>
-        </div>
-        <CreateProjectButton />
+      <div>
+        <h1 className="h1 font-[var(--font-heading)]">Projects</h1>
+        <p className="text-body">Track project portfolio and ticket workload visibility.</p>
       </div>
       <ProjectsTableClient
+        createAction={<CreateProjectButton />}
         projects={projects.map((project) => ({
           id: project.id,
           key: project.key ?? '—',

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VmStatusCard } from '@/components/dashboard/vm-status-card';
-import { fetchDashboardMetrics, fetchRecentActivity } from '@/lib/query-client';
+import { fetchAgentsOverview, fetchDashboardMetrics } from '@/lib/query-client';
 
 const HeroCanvas = dynamic(() => import('@/components/dashboard/hero-canvas'), { ssr: false });
 
@@ -15,7 +15,7 @@ export default function DashboardPage() {
   const headerRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const metricsQuery = useQuery({ queryKey: ['dashboard-metrics'], queryFn: fetchDashboardMetrics });
-  const activityQuery = useQuery({ queryKey: ['recent-activity'], queryFn: fetchRecentActivity });
+  const agentsQuery = useQuery({ queryKey: ['dashboard-agents'], queryFn: fetchAgentsOverview });
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -96,22 +96,40 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle>Agents</CardTitle>
+          <CardDescription>Identity and latest operator activity.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {activityQuery.isLoading && <Skeleton className="h-16 w-full" />}
-          {activityQuery.data?.comments.map((comment) => (
-            <div key={comment.id} className="rounded-md border p-3 text-sm">
-              <p className="font-medium">Comment</p>
-              <p>{comment.body}</p>
+        <CardContent>
+          {agentsQuery.isLoading && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-36 w-full" />
+              ))}
             </div>
-          ))}
-          {activityQuery.data?.requests.map((request) => (
-            <div key={request.id} className="rounded-md border p-3 text-sm">
-              <p className="font-medium">Request: {request.request_type}</p>
-              <p className="text-mutedForeground">Status: {request.status}</p>
+          )}
+
+          {agentsQuery.error && <p className="text-sm text-destructive">Failed to load agents: {(agentsQuery.error as Error).message}</p>}
+
+          {!agentsQuery.isLoading && !agentsQuery.error && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {agentsQuery.data?.map((agent) => (
+                <div key={agent.id} className="rounded-xl border border-border bg-background p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-lg font-semibold text-foreground">{agent.name}</p>
+                      <p className="text-xs text-mutedForeground">Last sign-in: {agent.lastSignInLabel}</p>
+                    </div>
+                    <Badge variant="default" className={agent.isActive ? '' : 'opacity-70'}>{agent.isActive ? 'Active' : 'Inactive'}</Badge>
+                  </div>
+                  <p className="mt-3 text-sm text-foreground">{agent.lastActivityLabel}</p>
+                  <div className="mt-3 space-y-1 text-xs text-mutedForeground">
+                    <p>Department: {agent.department || '—'}</p>
+                    <p>Role: {agent.role || '—'}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </CardContent>
       </Card>
     </div>

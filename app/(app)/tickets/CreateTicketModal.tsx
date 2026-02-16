@@ -24,7 +24,19 @@ type ParentTicketOption = {
 type CreateTicketModalProps = {
   open: boolean;
   onClose: () => void;
-  onCreated: () => Promise<void> | void;
+  onCreated: (
+    createdTicket?: {
+      id: string;
+      ticket_no: number | null;
+      title: string;
+      status: string;
+      owner_agent_id: string | null;
+      reporter_agent_id: string | null;
+      updated_at: string | null;
+      owner_name: string | null;
+      reporter_name: string | null;
+    }
+  ) => Promise<void> | void;
 };
 
 const NONE_VALUE = '__none__';
@@ -38,6 +50,13 @@ function statusTone(status: string | null) {
   if (CLOSED_STATUSES.has(normalized)) return 'bg-red-500';
   if (ONGOING_STATUSES.has(normalized)) return 'bg-yellow-400';
   return 'bg-green-500';
+}
+
+
+function relationName(value: { display_name: string | null } | { display_name: string | null }[] | null | undefined) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0]?.display_name ?? null;
+  return value.display_name ?? null;
 }
 
 export default function CreateTicketModal({ open, onClose, onCreated }: CreateTicketModalProps) {
@@ -190,18 +209,22 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
       .map((item) => item.trim())
       .filter(Boolean);
 
-    const { error: insertError } = await supabase.from('mc_tickets').insert({
-      title: title.trim(),
-      description: description.trim() || null,
-      status,
-      priority,
-      owner_agent_id: ownerAgentId === NONE_VALUE ? null : ownerAgentId,
-      reporter_agent_id: reporterAgentId,
-      due_at: dueAt ? new Date(`${dueAt}T00:00:00.000Z`).toISOString() : null,
-      labels: normalizedLabels.length > 0 ? normalizedLabels : null,
-      parent_ticket_id: parentTicketId,
-      context
-    });
+    const { data: insertedTicket, error: insertError } = await (supabase as any)
+      .from('mc_tickets')
+      .insert({
+        title: title.trim(),
+        description: description.trim() || null,
+        status,
+        priority,
+        owner_agent_id: ownerAgentId === NONE_VALUE ? null : ownerAgentId,
+        reporter_agent_id: reporterAgentId,
+        due_at: dueAt ? new Date(`${dueAt}T00:00:00.000Z`).toISOString() : null,
+        labels: normalizedLabels.length > 0 ? normalizedLabels : null,
+        parent_ticket_id: parentTicketId,
+        context
+      })
+      .select('id, ticket_no, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
+      .single();
 
     setIsSubmitting(false);
 
@@ -214,8 +237,22 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
       return;
     }
 
-    notify('Ticket created.');
-    await onCreated();
+    notify(`Ticket MC-${insertedTicket?.ticket_no ?? '—'} created.`);
+    await onCreated(
+      insertedTicket
+        ? {
+            id: insertedTicket.id,
+            ticket_no: insertedTicket.ticket_no,
+            title: insertedTicket.title,
+            status: insertedTicket.status,
+            owner_agent_id: insertedTicket.owner_agent_id,
+            reporter_agent_id: insertedTicket.reporter_agent_id,
+            updated_at: insertedTicket.updated_at,
+            owner_name: relationName(insertedTicket.owner_agent),
+            reporter_name: relationName(insertedTicket.reporter_agent)
+          }
+        : undefined
+    );
     handleClose();
   };
 
