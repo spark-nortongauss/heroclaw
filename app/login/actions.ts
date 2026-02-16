@@ -36,7 +36,7 @@ export async function signInWithPassword(
   }
 
   // If successful, redirect to dashboard
-  redirect('/tickets');
+  redirect('/dashboard');
 }
 
 export async function signUpWithPassword(
@@ -66,7 +66,7 @@ export async function signUpWithPassword(
 
   // If email confirmations are OFF, Supabase returns a session immediately.
   if (data?.session) {
-    redirect('/tickets');
+    redirect('/dashboard');
   }
 
   // If confirmations are ON, user must confirm via email before a session exists.

@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
-const DEFAULT_REDIRECT_PATH = "/tickets";
+const DEFAULT_REDIRECT_PATH = "/dashboard";
 
 type CookieToSet = {
   name: string;

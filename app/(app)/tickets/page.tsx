@@ -1,17 +1,17 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TicketTable } from '@/components/ui/ticket-table';
 import CreateTicketModal from './CreateTicketModal';
 import type { TicketRowItem } from '@/components/ui/ticket-row';
-
 
 type TicketWithAgents = {
   id: string;
@@ -28,9 +28,7 @@ async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('mc_tickets')
-    .select(
-      'id, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)'
-    )
+    .select('id, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
     .order('updated_at', { ascending: false });
   if (error) throw error;
 
@@ -63,11 +61,10 @@ const relativeTime = (dateValue: string) => {
   return formatter.format(diffDays, 'day');
 };
 
-
 const normalizeStatus = (status: string): TicketRowItem['status'] => {
-  if (status === 'ongoing' || status === 'done' || status === 'not_done') {
-    return status;
-  }
+  if (status === 'ongoing' || status === 'done' || status === 'not_done') return status;
+  if (['in_progress', 'waiting', 'blocked', 'next'].includes(status)) return 'ongoing';
+  if (['closed', 'resolved'].includes(status)) return 'done';
   return 'not_done';
 };
 
@@ -79,6 +76,7 @@ const choosePriority = (status: string): TicketRowItem['priority'] => {
 
 export default function TicketsPage() {
   const router = useRouter();
+  const { notify } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -86,13 +84,17 @@ export default function TicketsPage() {
   const [priority, setPriority] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [ticketsData, setTicketsData] = useState<TicketWithAgents[]>([]);
   const attachmentCountCache = useRef<Map<string, number>>(new Map());
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [loadingAttachmentIds, setLoadingAttachmentIds] = useState<Record<string, boolean>>({});
   const { data = [], isLoading } = useQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
+
+  useEffect(() => {
+    setTicketsData(data);
+  }, [data]);
 
   const loadAttachmentCount = async (ticketId: string) => {
     if (attachmentCountCache.current.has(ticketId) || loadingAttachmentIds[ticketId]) return;
@@ -115,7 +117,7 @@ export default function TicketsPage() {
   };
 
   const ticketRows = useMemo<TicketRowItem[]>(() => {
-    return data.map((ticket, index) => ({
+    return ticketsData.map((ticket, index) => ({
       id: ticket.id,
       issueKey: `MC-${String(index + 101)}`,
       summary: ticket.title,
@@ -126,7 +128,7 @@ export default function TicketsPage() {
       updatedLabel: relativeTime(ticket.updated_at),
       priority: choosePriority(ticket.status)
     }));
-  }, [data]);
+  }, [ticketsData]);
 
   const filtered = useMemo(
     () =>
@@ -141,9 +143,7 @@ export default function TicketsPage() {
   );
 
   const assignees = useMemo(() => ['all', ...new Set(ticketRows.map((ticket) => ticket.assignee))], [ticketRows]);
-
   const allVisibleSelected = filtered.length > 0 && filtered.every((ticket) => selectedIds.includes(ticket.id));
-
 
   const toggleSelectAllVisible = (checked: boolean) => {
     const visibleIds = filtered.map((ticket) => ticket.id);
@@ -151,7 +151,6 @@ export default function TicketsPage() {
       setSelectedIds((prev) => [...new Set([...prev, ...visibleIds])]);
       return;
     }
-
     setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
   };
 
@@ -160,26 +159,31 @@ export default function TicketsPage() {
       setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       return;
     }
-
     setSelectedIds((prev) => prev.filter((item) => item !== id));
   };
 
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0 || !window.confirm(`Delete ${selectedIds.length} selected ticket(s)?`)) return;
 
-    setDeleteError(null);
     setIsDeleting(true);
+    const deletingIds = [...selectedIds];
+    const previousData = [...ticketsData];
+    setTicketsData((prev) => prev.filter((ticket) => !deletingIds.includes(ticket.id)));
+
     const supabase = createClient();
-    const { error } = await supabase.from('mc_tickets').delete().in('id', selectedIds);
+    const { error } = await supabase.from('mc_tickets').delete().in('id', deletingIds);
     setIsDeleting(false);
 
     if (error) {
-      setDeleteError(error.message);
+      setTicketsData(previousData);
+      notify(`Delete failed: ${error.message}`, 'error');
       return;
     }
 
     setSelectedIds([]);
+    notify('Ticket(s) deleted.');
     await queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    router.refresh();
   };
 
   return (
@@ -189,20 +193,12 @@ export default function TicketsPage() {
         <p className="text-body">Track tickets and monitor status transitions.</p>
       </div>
 
-      <div className="rounded-xl border border-border bg-white p-3 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <Input
-            placeholder="Search issues"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xl"
-            aria-label="Search issues"
-          />
+          <Input placeholder="Search issues" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xl" aria-label="Search issues" />
           <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-3">
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger aria-label="Filter by status">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="not_done">To Do</SelectItem>
@@ -211,21 +207,15 @@ export default function TicketsPage() {
               </SelectContent>
             </Select>
             <Select value={assignee} onValueChange={setAssignee}>
-              <SelectTrigger aria-label="Filter by assignee">
-                <SelectValue placeholder="Assignee" />
-              </SelectTrigger>
+              <SelectTrigger aria-label="Filter by assignee"><SelectValue placeholder="Assignee" /></SelectTrigger>
               <SelectContent>
                 {assignees.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item === 'all' ? 'All assignees' : item}
-                  </SelectItem>
+                  <SelectItem key={item} value={item}>{item === 'all' ? 'All assignees' : item}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger aria-label="Filter by priority">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
+              <SelectTrigger aria-label="Filter by priority"><SelectValue placeholder="Priority" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All priorities</SelectItem>
                 <SelectItem value="highest">Highest</SelectItem>
@@ -236,14 +226,12 @@ export default function TicketsPage() {
             </Select>
           </div>
           <Button className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]" onClick={() => setIsCreateModalOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Create Ticket
+            <Plus className="mr-1 h-4 w-4" />Create Ticket
           </Button>
-          <Button variant="destructive" disabled={selectedIds.length === 0 || isDeleting} onClick={handleDeleteSelected}>
+          <Button variant="destructive" disabled={selectedIds.length === 0 || isDeleting} onClick={() => void handleDeleteSelected()}>
             {isDeleting ? 'Deleting…' : 'Delete'}
           </Button>
         </div>
-        {deleteError && <p className="mt-2 text-sm text-red-600">{deleteError}</p>}
       </div>
 
       <TicketTable

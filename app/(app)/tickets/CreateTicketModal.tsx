@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/components/ui/toast';
 import type { Json } from '@/lib/supabase/types';
 
 type AgentOption = {
@@ -17,6 +18,7 @@ type ParentTicketOption = {
   id: string;
   title: string;
   ticket_no: number | null;
+  status: string | null;
 };
 
 type CreateTicketModalProps = {
@@ -28,8 +30,18 @@ type CreateTicketModalProps = {
 const NONE_VALUE = '__none__';
 const STATUS_OPTIONS = ['open', 'in_progress', 'done'] as const;
 const PRIORITY_OPTIONS = ['low', 'medium', 'high'] as const;
+const CLOSED_STATUSES = new Set(['done', 'closed', 'resolved']);
+const ONGOING_STATUSES = new Set(['in_progress', 'waiting', 'blocked', 'next', 'ongoing']);
+
+function statusTone(status: string | null) {
+  const normalized = (status ?? '').toLowerCase();
+  if (CLOSED_STATUSES.has(normalized)) return 'bg-red-500';
+  if (ONGOING_STATUSES.has(normalized)) return 'bg-yellow-400';
+  return 'bg-green-500';
+}
 
 export default function CreateTicketModal({ open, onClose, onCreated }: CreateTicketModalProps) {
+  const { notify } = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>('open');
@@ -37,13 +49,14 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
   const [ownerAgentId, setOwnerAgentId] = useState(NONE_VALUE);
   const [dueAt, setDueAt] = useState('');
   const [labels, setLabels] = useState('');
-  const [parentTicketId, setParentTicketId] = useState(NONE_VALUE);
+  const [parentTicketId, setParentTicketId] = useState<string | null>(null);
   const [parentQuery, setParentQuery] = useState('');
   const [contextText, setContextText] = useState('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
-  const [openTickets, setOpenTickets] = useState<ParentTicketOption[]>([]);
+  const [parentSuggestions, setParentSuggestions] = useState<ParentTicketOption[]>([]);
   const [reporterAgentId, setReporterAgentId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSearchingParents, setIsSearchingParents] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,32 +101,42 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
 
       setReporterAgentId(mapData?.agent_id ?? null);
     });
-
-    void supabase
-      .from('mc_tickets')
-      .select('id, title, ticket_no, status')
-      .not('status', 'in', '(done,closed)')
-      .order('updated_at', { ascending: false })
-      .then(({ data, error: ticketError }) => {
-        if (ticketError) {
-          setError(ticketError.message);
-          return;
-        }
-
-        setOpenTickets(((data ?? []) as Array<ParentTicketOption & { status: string | null }>).map(({ id, title, ticket_no }) => ({ id, title, ticket_no })));
-      });
   }, [open]);
 
-  const filteredParentTickets = useMemo(() => {
-    const query = parentQuery.trim().toLowerCase();
-    if (!query) return openTickets;
+  useEffect(() => {
+    if (!open) return;
+    const supabase = createClient();
+    const query = parentQuery.trim();
 
-    return openTickets.filter((ticket) => {
-      const titleMatch = ticket.title.toLowerCase().includes(query);
-      const keyMatch = `MC-${ticket.ticket_no ?? ''}`.toLowerCase().includes(query);
-      return titleMatch || keyMatch;
-    });
-  }, [openTickets, parentQuery]);
+    const timer = window.setTimeout(async () => {
+      setIsSearchingParents(true);
+      let request = supabase.from('mc_tickets').select('id, title, ticket_no, status').order('updated_at', { ascending: false }).limit(8);
+      const escaped = query.replaceAll('%', '\\%').replaceAll('_', '\\_');
+
+      if (query) {
+        const numeric = query.match(/\d+/)?.[0];
+        if (numeric) {
+          request = request.or(`ticket_no.eq.${numeric},title.ilike.%${escaped}%`);
+        } else {
+          request = request.ilike('title', `%${escaped}%`);
+        }
+      }
+
+      const { data, error: ticketError } = await request;
+      setIsSearchingParents(false);
+
+      if (ticketError) {
+        setError(ticketError.message);
+        return;
+      }
+
+      setParentSuggestions((data ?? []) as ParentTicketOption[]);
+    }, 280);
+
+    return () => window.clearTimeout(timer);
+  }, [open, parentQuery]);
+
+  const showSuggestions = useMemo(() => parentQuery.trim().length > 0, [parentQuery]);
 
   const resetForm = () => {
     setTitle('');
@@ -123,11 +146,12 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
     setOwnerAgentId(NONE_VALUE);
     setDueAt('');
     setLabels('');
-    setParentTicketId(NONE_VALUE);
+    setParentTicketId(null);
     setParentQuery('');
     setContextText('');
     setError(null);
     setIsSubmitting(false);
+    setParentSuggestions([]);
   };
 
   const handleClose = () => {
@@ -141,6 +165,11 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
 
     if (!title.trim()) {
       setError('Title is required.');
+      return;
+    }
+
+    if (!reporterAgentId) {
+      setError('Could not resolve your agent identity (mc_agent_auth_map). Please contact an administrator.');
       return;
     }
 
@@ -170,17 +199,22 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
       reporter_agent_id: reporterAgentId,
       due_at: dueAt ? new Date(`${dueAt}T00:00:00.000Z`).toISOString() : null,
       labels: normalizedLabels.length > 0 ? normalizedLabels : null,
-      parent_ticket_id: parentTicketId === NONE_VALUE ? null : parentTicketId,
+      parent_ticket_id: parentTicketId,
       context
     });
 
     setIsSubmitting(false);
 
     if (insertError) {
-      setError(insertError.message);
+      if (insertError.message.toLowerCase().includes('row-level security')) {
+        setError('Ticket creation is blocked by RLS policy on mc_tickets. Please update Supabase insert policy for your role/user.');
+      } else {
+        setError(insertError.message);
+      }
       return;
     }
 
+    notify('Ticket created.');
     await onCreated();
     handleClose();
   };
@@ -189,117 +223,98 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-xl border border-border bg-white p-4 shadow-xl">
-        <h2 className="text-lg font-semibold text-[#172B4D]">Create Ticket</h2>
+      <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-4 shadow-xl">
+        <h2 className="text-lg font-semibold text-[#172B4D] dark:text-foreground">Create Ticket</h2>
         <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#172B4D]">Title *</label>
+            <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Title *</label>
             <Input value={title} onChange={(event) => setTitle(event.target.value)} required />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#172B4D]">Description</label>
+            <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Description</label>
             <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#172B4D]">Status</label>
+              <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Status</label>
               <Select value={status} onValueChange={(value) => setStatus(value as (typeof STATUS_OPTIONS)[number])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{STATUS_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#172B4D]">Priority</label>
+              <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Priority</label>
               <Select value={priority} onValueChange={(value) => setPriority(value as (typeof PRIORITY_OPTIONS)[number])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRIORITY_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{PRIORITY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#172B4D]">Assignee</label>
+              <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Assignee</label>
               <Select value={ownerAgentId} onValueChange={setOwnerAgentId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE_VALUE}>Unassigned</SelectItem>
-                  {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.display_name ?? 'Unnamed Agent'}
-                    </SelectItem>
-                  ))}
+                  {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.display_name ?? 'Unnamed Agent'}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#172B4D]">Due date</label>
+              <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Due date</label>
               <Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#172B4D]">Labels (comma-separated)</label>
+            <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Labels (comma-separated)</label>
             <Input value={labels} onChange={(event) => setLabels(event.target.value)} placeholder="bug, backend" />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-[#172B4D]">Parent ticket</label>
-            <Input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder="Search by title or MC-#" className="mb-2" />
-            <Select value={parentTicketId} onValueChange={setParentTicketId}>
-              <SelectTrigger>
-                <SelectValue placeholder="No parent" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE_VALUE}>No parent</SelectItem>
-                {filteredParentTickets.map((ticket) => (
-                  <SelectItem key={ticket.id} value={ticket.id}>
-                    MC-{ticket.ticket_no ?? '-'} · {ticket.title}
-                  </SelectItem>
+          <div className="relative">
+            <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Parent ticket</label>
+            <Input value={parentQuery} onChange={(event) => {
+              setParentQuery(event.target.value);
+              setParentTicketId(null);
+            }} placeholder="Type ticket # or title" />
+            {showSuggestions && (
+              <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card shadow-lg">
+                {isSearchingParents && <p className="px-3 py-2 text-xs text-mutedForeground">Searching…</p>}
+                {!isSearchingParents && parentSuggestions.length === 0 && <p className="px-3 py-2 text-xs text-mutedForeground">No matches found.</p>}
+                {!isSearchingParents && parentSuggestions.map((ticket) => (
+                  <button
+                    key={ticket.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      setParentTicketId(ticket.id);
+                      setParentQuery(`MC-${ticket.ticket_no ?? '-'} — ${ticket.title}`);
+                    }}
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-full ${statusTone(ticket.status)}`} />
+                    <span>{`MC-${ticket.ticket_no ?? '-'} — ${ticket.title}`}</span>
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            )}
+            {parentTicketId && <p className="mt-1 text-xs text-mutedForeground">Parent ticket selected.</p>}
+            {!parentTicketId && <p className="mt-1 text-xs text-mutedForeground">Leave blank for no parent.</p>}
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-[#172B4D]">Context (JSON)</label>
-            <Textarea
-              value={contextText}
-              onChange={(event) => setContextText(event.target.value)}
-              rows={3}
-              placeholder='{"source":"tickets_page"}'
-            />
+            <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Context (JSON)</label>
+            <Textarea value={contextText} onChange={(event) => setContextText(event.target.value)} rows={3} placeholder='{"source":"tickets_page"}' />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={handleClose} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type="submit" className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating…' : 'Create'}
-            </Button>
+            <Button type="button" variant="secondary" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
+            <Button type="submit" className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]" disabled={isSubmitting}>{isSubmitting ? 'Creating…' : 'Create'}</Button>
           </div>
         </form>
       </div>

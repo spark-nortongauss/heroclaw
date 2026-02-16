@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table';
 import { formatDate, formatDateTime } from '@/lib/mission-control';
+import { useToast } from '@/components/ui/toast';
 
 type TicketRow = {
   id: string;
@@ -22,17 +23,35 @@ type TicketRow = {
   due_at: string | null;
 };
 
+type ArtifactRow = {
+  id: string;
+  ticket_id: string | null;
+  ticket_title: string;
+  ticket_no: number | null;
+  name: string | null;
+  filename: string | null;
+  kind: string | null;
+  created_at: string | null;
+  url: string | null;
+  object_path: string | null;
+  bytes: number | null;
+  mime_type: string | null;
+};
+
 export default function ProjectDetailClient({
   projectId,
   tickets,
+  artifacts,
   initialError
 }: {
   projectId: string;
   tickets: TicketRow[];
+  artifacts: ArtifactRow[];
   initialError?: string | null;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tickets'>('tickets');
+  const { notify } = useToast();
+  const [activeTab, setActiveTab] = useState<'overview' | 'tickets' | 'files'>('tickets');
   const [openCreate, setOpenCreate] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -59,11 +78,7 @@ export default function ProjectDetailClient({
 
       let reporterAgentId: string | null = null;
       if (authUserId) {
-        const { data: mapData } = await supabase
-          .from('mc_agent_auth_map')
-          .select('agent_id')
-          .eq('auth_user_id', authUserId)
-          .maybeSingle();
+        const { data: mapData } = await supabase.from('mc_agent_auth_map').select('agent_id').eq('auth_user_id', authUserId).maybeSingle();
         reporterAgentId = mapData?.agent_id ?? null;
       }
 
@@ -96,6 +111,7 @@ export default function ProjectDetailClient({
       }
 
       setOpenCreate(false);
+      notify('Ticket created.');
       router.refresh();
     });
   };
@@ -105,11 +121,12 @@ export default function ProjectDetailClient({
       <div className="flex gap-2 border-b">
         <button className={`px-3 py-2 text-sm ${activeTab === 'overview' ? 'border-b-2 border-[#172B4D] font-semibold' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
         <button className={`px-3 py-2 text-sm ${activeTab === 'tickets' ? 'border-b-2 border-[#172B4D] font-semibold' : ''}`} onClick={() => setActiveTab('tickets')}>Tickets</button>
+        <button className={`px-3 py-2 text-sm ${activeTab === 'files' ? 'border-b-2 border-[#172B4D] font-semibold' : ''}`} onClick={() => setActiveTab('files')}>Files</button>
       </div>
 
-      {activeTab === 'overview' ? (
-        <p className="text-sm text-muted-foreground">Use the tickets tab to track project execution and GTD workflow states.</p>
-      ) : (
+      {activeTab === 'overview' && <p className="text-sm text-muted-foreground">Use tabs to track project execution, tickets, and related files.</p>}
+
+      {activeTab === 'tickets' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Project Tickets</h2>
@@ -144,9 +161,55 @@ export default function ProjectDetailClient({
         </div>
       )}
 
+      {activeTab === 'files' && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Files related to this project</h2>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Name</TableHeaderCell>
+                <TableHeaderCell>Kind</TableHeaderCell>
+                <TableHeaderCell>Created</TableHeaderCell>
+                <TableHeaderCell>Ticket</TableHeaderCell>
+                <TableHeaderCell>URL / Path</TableHeaderCell>
+                <TableHeaderCell>Bytes</TableHeaderCell>
+                <TableHeaderCell>MIME</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {artifacts.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-sm text-mutedForeground">No artifacts found for this project.</TableCell>
+                </TableRow>
+              )}
+              {artifacts.map((artifact) => (
+                <TableRow key={artifact.id}>
+                  <TableCell className="font-medium">{artifact.name ?? artifact.filename ?? 'Unnamed'}</TableCell>
+                  <TableCell>{artifact.kind ?? '—'}</TableCell>
+                  <TableCell>{formatDateTime(artifact.created_at)}</TableCell>
+                  <TableCell>{`MC-${artifact.ticket_no ?? '—'} — ${artifact.ticket_title}`}</TableCell>
+                  <TableCell>
+                    {artifact.url ? (
+                      <a className="text-[#0052CC] underline" href={artifact.url} target="_blank" rel="noreferrer">
+                        Open
+                      </a>
+                    ) : (
+                      'No URL'
+                    )}
+                    {artifact.object_path && <p className="text-xs text-mutedForeground">{artifact.object_path}</p>}
+                  </TableCell>
+                  <TableCell>{artifact.bytes ?? '—'}</TableCell>
+                  <TableCell>{artifact.mime_type ?? '—'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
       {openCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl space-y-3 rounded-xl border bg-white p-4 shadow-lg">
+          <div className="w-full max-w-xl space-y-3 rounded-xl border bg-card p-4 shadow-lg">
             <h3 className="text-lg font-semibold">Create ticket</h3>
             <Input placeholder="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
             <Textarea placeholder="Description" value={description} onChange={(event) => setDescription(event.target.value)} rows={5} />
