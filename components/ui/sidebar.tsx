@@ -1,25 +1,26 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, LayoutDashboard, MessageCircle, PanelLeftClose, PanelLeftOpen, Ticket, FilePlus2, FolderOpen, FolderKanban, KanbanSquare } from 'lucide-react';
+import { ChevronLeft, FolderKanban, KanbanSquare, LayoutDashboard, MessageCircle, PanelLeftClose, Ticket, FolderOpen } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/tickets', label: 'Tickets', icon: Ticket },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/board', label: 'Board', icon: KanbanSquare },
-  { href: '/chat/allan', label: 'Chat (Allan)', icon: MessageCircle },
-  { href: '/requests/new', label: 'Requests', icon: FilePlus2 },
-  { href: '/project-files', label: 'Project Files', icon: FolderOpen }
+  { href: '/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/chat/allan', label: 'Chat', icon: MessageCircle },
+  { href: '/project-files', label: 'Files', icon: FolderOpen }
 ];
+
+const isActiveRoute = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
 export function Sidebar({
   isOpen,
   collapsed,
   onNavigate,
-  onToggleCollapse,
   onCloseMobile
 }: {
   isOpen: boolean;
@@ -35,24 +36,35 @@ export function Sidebar({
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col border-r border-white/15 bg-[#808080] text-white transition-all duration-300 motion-reduce:transition-none md:static md:translate-x-0',
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-        collapsed ? 'w-16' : 'w-60'
+        collapsed ? 'w-20' : 'w-60'
       )}
       aria-label="Primary"
     >
-      <div className={cn('flex h-14 items-center border-b border-white/15 px-3', collapsed ? 'justify-center' : 'justify-between')}>
-        {!collapsed && <p className="font-[var(--font-heading)] text-sm font-semibold text-white">Mission Control</p>}
-        <button
-          onClick={onToggleCollapse}
-          className="rounded-md p-1.5 text-white/90 transition hover:bg-white/15 hover:text-white"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </button>
+      <div className={cn('flex h-20 items-center justify-center border-b border-white/15 px-3', collapsed ? 'py-2' : 'py-3')}>
+        {collapsed ? (
+          <Image
+            src="/brand/Norton-Gauss_Main_Logo_1100x875.png"
+            alt="Norton-Gauss"
+            width={42}
+            height={34}
+            className="h-auto w-[42px] object-contain"
+            priority
+          />
+        ) : (
+          <Image
+            src="/brand/Norton-Gauss_Main_Logo_White Write_No Tagline_1920x1080.png"
+            alt="Norton-Gauss"
+            width={170}
+            height={44}
+            className="h-auto w-[170px] object-contain"
+            priority
+          />
+        )}
       </div>
 
       <nav className="space-y-1 p-2">
         {navItems.map((item) => {
-          const active = pathname.startsWith(item.href);
+          const active = isActiveRoute(pathname, item.href);
           const Icon = item.icon;
 
           return (

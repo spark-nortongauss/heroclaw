@@ -3,6 +3,7 @@
 import { Menu, PanelLeftClose } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { ThemeSwitcher } from '@/components/layout/theme-switcher';
 import { createClient } from '@/lib/supabase/client';
 
 export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: string; onOpenSidebar: () => void; onToggleSidebar: () => void }) {
@@ -24,9 +25,9 @@ export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: stri
         <button className="hidden rounded-md p-2 transition hover:bg-muted md:inline-flex" onClick={onToggleSidebar} aria-label="Toggle sidebar">
           <PanelLeftClose className="h-4 w-4" />
         </button>
-        <h1 className="font-[var(--font-heading)] text-lg font-semibold">Mission Control</h1>
       </div>
       <div className="flex items-center gap-3">
+        <ThemeSwitcher />
         <span className="hidden rounded-full bg-muted px-3 py-1 text-xs text-mutedForeground md:inline-flex">{email ?? 'Unknown user'}</span>
         <Button variant="secondary" size="sm" onClick={onLogout} className="transition-colors hover:bg-muted">
           Logout

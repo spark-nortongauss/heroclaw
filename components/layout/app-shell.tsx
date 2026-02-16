@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Sidebar } from '@/components/ui/sidebar';
 import { Topbar } from '@/components/ui/topbar';
+import { InactivityGuard } from '@/components/layout/inactivity-guard';
 
 const SIDEBAR_KEY = 'mc-sidebar-collapsed';
 
@@ -28,13 +29,8 @@ export function AppShell({ children, email }: { children: ReactNode; email?: str
 
   return (
     <div className="neon-grid min-h-screen md:flex">
-      <Sidebar
-        isOpen={isOpen}
-        collapsed={collapsed}
-        onNavigate={() => setIsOpen(false)}
-        onToggleCollapse={() => setCollapsed((prev) => !prev)}
-        onCloseMobile={() => setIsOpen(false)}
-      />
+      <InactivityGuard />
+      <Sidebar isOpen={isOpen} collapsed={collapsed} onNavigate={() => setIsOpen(false)} onCloseMobile={() => setIsOpen(false)} onToggleCollapse={() => setCollapsed((prev) => !prev)} />
       {isOpen && <button className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setIsOpen(false)} aria-label="Close menu" />}
       <div className="relative z-10 min-w-0 flex-1">
         <Topbar email={email} onOpenSidebar={() => setIsOpen(true)} onToggleSidebar={() => setCollapsed((prev) => !prev)} />

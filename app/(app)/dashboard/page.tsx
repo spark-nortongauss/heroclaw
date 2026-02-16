@@ -1,19 +1,19 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchRecentActivity, fetchTicketCounts } from '@/lib/query-client';
+import { fetchDashboardMetrics, fetchRecentActivity } from '@/lib/query-client';
 
 const HeroCanvas = dynamic(() => import('@/components/dashboard/hero-canvas'), { ssr: false });
 
 export default function DashboardPage() {
   const headerRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
-  const countsQuery = useQuery({ queryKey: ['ticket-counts'], queryFn: fetchTicketCounts });
+  const metricsQuery = useQuery({ queryKey: ['dashboard-metrics'], queryFn: fetchDashboardMetrics });
   const activityQuery = useQuery({ queryKey: ['recent-activity'], queryFn: fetchRecentActivity });
 
   useEffect(() => {
@@ -34,18 +34,9 @@ export default function DashboardPage() {
     });
   }, []);
 
-  const ticketSummary = useMemo(
-    () => ({
-      done: countsQuery.data?.done ?? 0,
-      ongoing: countsQuery.data?.ongoing ?? 0,
-      not_done: countsQuery.data?.not_done ?? 0
-    }),
-    [countsQuery.data]
-  );
-
   return (
     <div className="space-y-6">
-      <div ref={headerRef} className="space-y-4 rounded-xl border bg-white p-5 shadow-soft">
+      <div ref={headerRef} className="space-y-4 rounded-xl border bg-card p-5 shadow-soft">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="h1 font-[var(--font-heading)]">Dashboard</h1>
@@ -56,37 +47,47 @@ export default function DashboardPage() {
         <HeroCanvas />
       </div>
 
-      <div ref={cardsRef} className="grid gap-4 md:grid-cols-3">
-        <Card data-card>
+      {metricsQuery.data?.noAccess ? (
+        <Card>
           <CardHeader>
-            <CardTitle>Open Projects</CardTitle>
-            <CardDescription>Placeholder until projects table exists.</CardDescription>
+            <CardTitle>Metrics unavailable</CardTitle>
+            <CardDescription>No access</CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">0</p>
-          </CardContent>
+          <CardContent className="text-sm text-mutedForeground">Your role cannot read one or more tables used by dashboard metrics.</CardContent>
         </Card>
-        <Card data-card>
-          <CardHeader>
-            <CardTitle>Inbox Items</CardTitle>
-            <CardDescription>Placeholder until inbox table exists.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">0</p>
-          </CardContent>
-        </Card>
-        <Card data-card>
-          <CardHeader>
-            <CardTitle>Tickets</CardTitle>
-            <CardDescription>done / ongoing / not_done</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-2 text-sm">
-            <Badge variant="done">{ticketSummary.done} done</Badge>
-            <Badge variant="ongoing">{ticketSummary.ongoing} ongoing</Badge>
-            <Badge variant="not_done">{ticketSummary.not_done} not done</Badge>
-          </CardContent>
-        </Card>
-      </div>
+      ) : (
+        <div ref={cardsRef} className="grid gap-4 md:grid-cols-3">
+          <Card data-card>
+            <CardHeader>
+              <CardTitle>Total projects</CardTitle>
+              <CardDescription>All projects in mc_projects</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <p className="text-3xl font-semibold">{metricsQuery.data?.totalProjects ?? '—'}</p>
+              <p className="text-xs text-mutedForeground">Active: {metricsQuery.data?.activeProjects ?? '—'}</p>
+            </CardContent>
+          </Card>
+          <Card data-card>
+            <CardHeader>
+              <CardTitle>Total tickets</CardTitle>
+              <CardDescription>Open and closed coverage</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <p className="text-3xl font-semibold">{metricsQuery.data?.totalTickets ?? '—'}</p>
+              <p className="text-xs text-mutedForeground">Open: {metricsQuery.data?.openTickets ?? '—'} · Done/Closed: {metricsQuery.data?.doneTickets ?? '—'}</p>
+            </CardContent>
+          </Card>
+          <Card data-card>
+            <CardHeader>
+              <CardTitle>Due soon</CardTitle>
+              <CardDescription>Next 7 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold">{metricsQuery.data?.dueSoon ?? '—'}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
