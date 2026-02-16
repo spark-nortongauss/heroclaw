@@ -39,6 +39,7 @@ type TicketDetail = {
   updated_at: string | null;
   closed_at: string | null;
   parent_ticket_id: string | null;
+  project_id: string | null;
   owner: AgentRef | AgentRef[] | null;
   reporter: AgentRef | AgentRef[] | null;
 };
@@ -90,6 +91,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
       updated_at,
       closed_at,
       parent_ticket_id,
+      project_id,
       owner:mc_agents!mc_tickets_owner_agent_id_fkey(id, display_name),
       reporter:mc_agents!mc_tickets_reporter_agent_id_fkey(id, display_name)
     `
@@ -115,7 +117,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [{ data: commentsData }, { data: agentsData }] = await Promise.all([
+  const [{ data: commentsData }, { data: agentsData }, { data: artifactsData }] = await Promise.all([
     (supabase as any)
       .from('mc_ticket_comments')
       .select(
@@ -129,6 +131,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true }),
     (supabase as any).from('mc_agents').select('*').order('name', { ascending: true })
+    ,(supabase as any).from('mc_artifacts').select('id, title, kind, created_at').eq('ticket_id', ticket.id).order('created_at', { ascending: false })
   ]);
 
   const comments = ((commentsData ?? []) as CommentRow[]).map((comment) => {
@@ -162,7 +165,38 @@ export default async function TicketDetailPage({ params }: PageProps) {
         ← Back to tickets
       </Link>
 
+      <section className="rounded-lg border border-border bg-white p-3">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Ticket metadata</p>
+        <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+          <p>Ticket No: {ticket.ticket_no ?? '—'}</p>
+          <p>Status: {ticket.status ?? '—'}</p>
+          <p>Priority: {ticket.priority ?? '—'}</p>
+          <p>
+            Project:{' '}
+            {ticket.project_id ? (
+              <Link href={`/projects/${ticket.project_id}`} className="underline">
+                Open project
+              </Link>
+            ) : (
+              '—'
+            )}
+          </p>
+          <p>Created: {ticket.created_at ? new Date(ticket.created_at).toLocaleString() : '—'}</p>
+          <p>Updated: {ticket.updated_at ? new Date(ticket.updated_at).toLocaleString() : '—'}</p>
+        </div>
+      </section>
+
       <TicketDetailClient agents={agents} comments={comments} ticket={ticket} />
+
+      <section className="rounded-lg border border-border bg-white p-3">
+        <h2 className="text-sm font-semibold">Artifacts</h2>
+        <div className="mt-2 space-y-1 text-sm">
+          {(artifactsData ?? []).length === 0 && <p className="text-muted-foreground">No artifacts linked.</p>}
+          {(artifactsData ?? []).map((artifact: any) => (
+            <p key={artifact.id}>{artifact.title ?? artifact.kind ?? artifact.id}</p>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }

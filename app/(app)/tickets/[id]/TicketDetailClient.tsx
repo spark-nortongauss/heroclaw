@@ -56,7 +56,7 @@ type ReferencedTicket = {
   title: string;
 };
 
-const STATUS_OPTIONS = ['open', 'in_progress', 'blocked', 'done'] as const;
+const STATUS_OPTIONS = ['inbox', 'next', 'waiting', 'someday', 'done', 'open', 'in_progress', 'blocked'] as const;
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const;
 
 function isObject(value: Json | null): value is Record<string, Json> {
