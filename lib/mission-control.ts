@@ -8,27 +8,32 @@ export const GTD_COLUMNS = [
 
 export type GtdStatus = (typeof GTD_COLUMNS)[number]['key'];
 
-const BACKWARD_STATUS_MAP: Record<string, GtdStatus> = {
+/**
+ * Deterministic board mapping from mc_tickets.status text -> GTD board column key:
+ * inbox   -> Inbox
+ * next    -> Next Actions
+ * waiting -> Waiting For
+ * someday -> Someday/Maybe
+ * done    -> Done
+ *
+ * Backward compatibility:
+ * open   -> inbox
+ * closed -> done
+ * anything else -> inbox
+ */
+const BOARD_STATUS_MAP: Record<string, GtdStatus> = {
+  inbox: 'inbox',
+  next: 'next',
+  waiting: 'waiting',
+  someday: 'someday',
+  done: 'done',
   open: 'inbox',
-  todo: 'inbox',
-  not_done: 'inbox',
-  in_progress: 'next',
-  ongoing: 'next',
-  blocked: 'waiting',
-  closed: 'done',
-  complete: 'done',
-  completed: 'done'
+  closed: 'done'
 };
 
-/**
- * mc_tickets.status is free text in production. We normalize legacy values for rendering,
- * but persist explicit GTD values (inbox/next/waiting/someday/done) when cards move on board.
- */
 export function normalizeTicketStatus(status: string | null | undefined): GtdStatus {
   const normalized = (status ?? '').toLowerCase().trim();
-  if (normalized in BACKWARD_STATUS_MAP) return BACKWARD_STATUS_MAP[normalized];
-  if (GTD_COLUMNS.some((column) => column.key === normalized)) return normalized as GtdStatus;
-  return 'inbox';
+  return BOARD_STATUS_MAP[normalized] ?? 'inbox';
 }
 
 export function formatDateTime(value: string | null | undefined) {
