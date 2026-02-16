@@ -1,7 +1,8 @@
 'use client';
 
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/components/providers/theme-provider';
 
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -14,26 +15,34 @@ const themeMeta: Record<ThemeOption, { label: string; Icon: typeof Sun }> = {
 
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
-  const current = themeMeta[theme];
 
   return (
-    <Select value={theme} onValueChange={(value) => setTheme(value as ThemeOption)}>
-      <SelectTrigger className="h-9 w-9 px-0" aria-label={`Theme: ${current.label}`} title={current.label}>
-        <current.Icon className="mx-auto h-4 w-4" />
-      </SelectTrigger>
-      <SelectContent>
-        {(Object.keys(themeMeta) as ThemeOption[]).map((key) => {
-          const option = themeMeta[key];
-          return (
-            <SelectItem key={key} value={key}>
-              <span className="inline-flex items-center gap-2">
-                <option.Icon className="h-3.5 w-3.5" />
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9 w-9 p-0 pointer-events-auto"
+          aria-label={`Theme: ${themeMeta[theme].label}`}
+          title={themeMeta[theme].label}
+        >
+          <Monitor className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="z-50" align="end">
+        <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as ThemeOption)}>
+          {(Object.keys(themeMeta) as ThemeOption[]).map((key) => {
+            const option = themeMeta[key];
+            return (
+              <DropdownMenuRadioItem key={key} value={key} className="gap-2">
+                <option.Icon className="h-4 w-4" />
                 {option.label}
-              </span>
-            </SelectItem>
-          );
-        })}
-      </SelectContent>
-    </Select>
+              </DropdownMenuRadioItem>
+            );
+          })}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
