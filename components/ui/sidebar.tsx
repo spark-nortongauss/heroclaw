@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, LayoutDashboard, MessageCircle, PanelLeftClose, PanelLeftOpen, Ticket, FilePlus2, FolderOpen } from 'lucide-react';
+import { ChevronLeft, LayoutDashboard, MessageCircle, PanelLeftClose, PanelLeftOpen, Ticket, FilePlus2, FolderOpen, FolderKanban, KanbanSquare } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/board', label: 'Board', icon: KanbanSquare },
   { href: '/chat/allan', label: 'Chat (Allan)', icon: MessageCircle },
   { href: '/requests/new', label: 'Requests', icon: FilePlus2 },
   { href: '/project-files', label: 'Project Files', icon: FolderOpen }

@@ -67,11 +67,37 @@ export async function updateTicketFields({ ticketId, patch }: TicketPatchInput) 
     return { error: 'No valid fields to update.' };
   }
 
+  const { data: previousTicket } = await (supabase as any)
+    .from('mc_tickets')
+    .select('id, status, priority, title, description, owner_agent_id, reporter_agent_id, due_at, labels, context')
+    .eq('id', ticketId)
+    .maybeSingle();
+
+  const { data: authData } = await supabase.auth.getUser();
+  const authUserId = authData.user?.id;
+  let actorAgentId: string | null = null;
+  if (authUserId) {
+    const { data: agentMapData } = await (supabase as any)
+      .from('mc_agent_auth_map')
+      .select('agent_id')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+    actorAgentId = agentMapData?.agent_id ?? null;
+  }
+
   const { error } = await supabase.from('mc_tickets').update(allowedPatch as never).eq('id', ticketId);
 
   if (error) {
     return { error: error.message };
   }
+
+  await (supabase as any).from('mc_ticket_events').insert({
+    ticket_id: ticketId,
+    actor_agent_id: actorAgentId,
+    event_type: 'ticket_updated',
+    before: previousTicket,
+    after: allowedPatch
+  });
 
   revalidatePath(`/tickets/${ticketId}`);
   return { error: null };
@@ -123,51 +149,23 @@ export async function createTicketComment({ ticketId, body, mentionsAgentIds }: 
     return { error: userError?.message ?? 'Unable to resolve authenticated user.' };
   }
 
-  let { data: agentData, error: agentError } = await (supabase as any)
-    .from('mc_agents')
-    .select('id')
+  const { data: agentData, error: agentError } = await (supabase as any)
+    .from('mc_agent_auth_map')
+    .select('agent_id')
     .eq('auth_user_id', authUserId)
-    .limit(1)
     .maybeSingle();
 
-  if (!agentData?.id) {
-    const { data: humanAgentData } = await (supabase as any)
-      .from('mc_agents')
-      .select('id')
-      .or("slug.eq.tayroni-human,role.eq.human,display_name.ilike.%(Human)%")
-      .limit(1)
-      .maybeSingle();
-
-    if (humanAgentData?.id) {
-      await (supabase as any)
-        .from('mc_agents')
-        .update({ auth_user_id: authUserId })
-        .eq('id', humanAgentData.id)
-        .is('auth_user_id', null);
-
-      const { data: mappedAgentData, error: mappedAgentError } = await (supabase as any)
-        .from('mc_agents')
-        .select('id')
-        .eq('auth_user_id', authUserId)
-        .limit(1)
-        .maybeSingle();
-
-      agentData = mappedAgentData;
-      agentError = mappedAgentError;
-    }
-  }
-
-  if (agentError || !agentData?.id) {
+  if (agentError || !agentData?.agent_id) {
     return {
       error:
         agentError?.message ??
-        'Unable to resolve agent for authenticated user. Set auth_user_id on a mc_agents row for this user.'
+        'Unable to resolve agent for authenticated user in mc_agent_auth_map.'
     };
   }
 
   const { error } = await (supabase as any).from('mc_ticket_comments').insert({
     ticket_id: ticketId,
-    author_agent_id: agentData.id,
+    author_agent_id: agentData.agent_id,
     body: trimmedBody,
     mentions_agent_ids: mentionsAgentIds
   });
