@@ -69,8 +69,8 @@ export function TicketRow({
         }
       }}
       className={cn(
-        'group cursor-pointer border-t border-border/70 text-sm transition-all duration-200 hover:bg-[#F4F5F7] focus-within:bg-[#EBECF0] motion-reduce:transition-none',
-        selected && 'bg-[#EBECF0]'
+        'group cursor-pointer border-t border-border/70 text-sm transition-all duration-200 hover:bg-muted/80 focus-within:bg-muted motion-reduce:transition-none',
+        selected && 'bg-muted'
       )}
     >
       <TableCell className="py-2" onClick={(event) => event.stopPropagation()}>
@@ -86,7 +86,7 @@ export function TicketRow({
         />
       </TableCell>
       <TableCell className="py-2">
-        <span className="font-medium text-[#0052CC]">{ticket.issueKey}</span>
+        <span className="font-medium text-primary">{ticket.issueKey}</span>
       </TableCell>
       <TableCell className="py-2">
         <span className="font-semibold text-foreground">{ticket.summary}</span>
@@ -96,7 +96,7 @@ export function TicketRow({
       </TableCell>
       <TableCell className="py-2">
         <span className="inline-flex items-center gap-2">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#DFE1E6] text-[10px] font-semibold text-[#172B4D]">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
             {initials(ticket.assignee)}
           </span>
           <span className="text-xs">{ticket.assignee}</span>
@@ -105,13 +105,13 @@ export function TicketRow({
       <TableCell className="py-2">
         <PriorityBadge priority={ticket.priority} />
       </TableCell>
-      <TableCell className="py-2 text-xs text-mutedForeground">
+      <TableCell className="py-2 text-xs text-muted-foreground">
         {ticket.updatedLabel}
       </TableCell>
-      <TableCell className="py-2 text-xs text-mutedForeground">
+      <TableCell className="py-2 text-xs text-muted-foreground">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[#42526E] hover:bg-[#DFE1E6] hover:text-[#172B4D]"
+          className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           onMouseEnter={() => onAttachmentHover?.(ticket.id)}
           onFocus={() => onAttachmentHover?.(ticket.id)}
           onClick={(event) => {
@@ -124,10 +124,10 @@ export function TicketRow({
           <span>{attachmentLoading ? '…' : attachmentCount ?? '—'}</span>
         </button>
       </TableCell>
-      <TableCell className="py-2 text-xs text-mutedForeground">
+      <TableCell className="py-2 text-xs text-muted-foreground">
         {ticket.reporter ?? '-'}
       </TableCell>
-      <TableCell className="py-2 text-xs text-mutedForeground">
+      <TableCell className="py-2 text-xs text-muted-foreground">
         {ticket.parent ?? '-'}
       </TableCell>
     </TableRow>

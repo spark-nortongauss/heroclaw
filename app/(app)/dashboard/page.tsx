@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VmStatusCard } from '@/components/dashboard/vm-status-card';
 import { fetchDashboardMetrics, fetchRecentActivity } from '@/lib/query-client';
 
 const HeroCanvas = dynamic(() => import('@/components/dashboard/hero-canvas'), { ssr: false });
@@ -48,15 +49,18 @@ export default function DashboardPage() {
       </div>
 
       {metricsQuery.data?.noAccess ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Metrics unavailable</CardTitle>
-            <CardDescription>No access</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-mutedForeground">Your role cannot read one or more tables used by dashboard metrics.</CardContent>
-        </Card>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Metrics unavailable</CardTitle>
+              <CardDescription>No access</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-mutedForeground">Your role cannot read one or more tables used by dashboard metrics.</CardContent>
+          </Card>
+          <VmStatusCard />
+        </div>
       ) : (
-        <div ref={cardsRef} className="grid gap-4 md:grid-cols-3">
+        <div ref={cardsRef} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card data-card>
             <CardHeader>
               <CardTitle>Total projects</CardTitle>
@@ -86,6 +90,7 @@ export default function DashboardPage() {
               <p className="text-3xl font-semibold">{metricsQuery.data?.dueSoon ?? '—'}</p>
             </CardContent>
           </Card>
+          <VmStatusCard />
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { Menu, PanelLeftClose } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ThemeSwitcher } from '@/components/layout/theme-switcher';
+import { NotificationBell } from '@/components/layout/notification-bell';
 import { createClient } from '@/lib/supabase/client';
 
 export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: string; onOpenSidebar: () => void; onToggleSidebar: () => void }) {
@@ -27,6 +28,7 @@ export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: stri
         </button>
       </div>
       <div className="flex items-center gap-3">
+        <NotificationBell />
         <ThemeSwitcher />
         <span className="hidden rounded-full bg-muted px-3 py-1 text-xs text-mutedForeground md:inline-flex">{email ?? 'Unknown user'}</span>
         <Button variant="secondary" size="sm" onClick={onLogout} className="transition-colors hover:bg-muted">

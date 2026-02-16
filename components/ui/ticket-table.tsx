@@ -32,10 +32,10 @@ export function TicketTable({
   onAttachmentClick?: (id: string) => void;
 }) {
   return (
-    <div className="overflow-auto rounded-xl border border-border bg-white">
+    <div className="overflow-auto rounded-xl border border-border bg-card">
       <Table>
         <TableHead>
-          <tr className="sticky top-0 z-10 bg-[#F4F5F7] text-xs uppercase tracking-wide text-[#6B778C]">
+          <tr className="sticky top-0 z-10 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
             <TableHeaderCell className="w-10">
               <input
                 type="checkbox"
@@ -65,7 +65,7 @@ export function TicketTable({
           )}
           {!loading && tickets.length === 0 && (
             <tr>
-              <TableCell colSpan={10} className="text-center text-sm text-mutedForeground">
+              <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
                 No tickets found.
               </TableCell>
             </tr>

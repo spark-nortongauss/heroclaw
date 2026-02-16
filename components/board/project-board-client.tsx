@@ -80,7 +80,7 @@ export default function ProjectBoardClient({ projects, initialProjectId, initial
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
         <p className="mb-2 text-sm font-medium">Project space</p>
         <Select value={projectId} onValueChange={onProjectChange}>
           <SelectTrigger className="max-w-md"><SelectValue placeholder="Select project" /></SelectTrigger>
@@ -91,12 +91,12 @@ export default function ProjectBoardClient({ projects, initialProjectId, initial
           </SelectContent>
         </Select>
       </div>
-      {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
       <div className="grid gap-3 lg:grid-cols-5">
         {GTD_COLUMNS.map((column) => (
           <section
             key={column.key}
-            className="rounded-xl border bg-slate-50 p-3"
+            className="rounded-xl border bg-muted/40 p-3"
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
@@ -112,7 +112,7 @@ export default function ProjectBoardClient({ projects, initialProjectId, initial
                   draggable
                   onDragStart={() => setDraggingId(ticket.id)}
                   onClick={() => router.push(`/tickets/${ticket.id}`)}
-                  className="cursor-pointer rounded-lg border bg-white p-3 shadow-sm"
+                  className="cursor-pointer rounded-lg border bg-card p-3 shadow-sm transition hover:bg-muted/30"
                 >
                   <p className="text-xs text-muted-foreground">MC-{ticket.ticket_no ?? '—'}</p>
                   <p className="mt-1 text-sm font-medium">{ticket.title}</p>
