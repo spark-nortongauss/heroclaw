@@ -9,9 +9,35 @@ type TicketLike = {
   due_at?: string | null;
 };
 
+type AgentRecord = {
+  id: string;
+  display_name: string | null;
+  slug: string | null;
+  department: string | null;
+  role: string | null;
+  is_active: boolean | null;
+};
+
+type AgentAuthMapRecord = {
+  agent_id: string;
+  auth_user_id: string;
+};
+
+type AgentEventRecord = {
+  actor_agent_id: string | null;
+  event_type: string | null;
+  created_at: string | null;
+};
+
 const CLOSED = new Set(['done', 'closed', 'resolved']);
 const ONGOING = new Set(['ongoing', 'in_progress', 'waiting', 'blocked', 'next']);
 const ACTIVE_PROJECTS = new Set(['active', 'open', 'in_progress']);
+const EVENT_LABELS: Record<string, string> = {
+  ticket_created: 'Created a ticket',
+  ticket_updated: 'Updated a ticket',
+  comment_added: 'Posted a comment',
+  status_changed: 'Moved ticket status'
+};
 
 function isNoAccessError(message: string) {
   const lowered = message.toLowerCase();
@@ -23,6 +49,25 @@ function normalizeTicketStatus(status: string | null): TicketStatus {
   if (CLOSED.has(value)) return 'done';
   if (ONGOING.has(value)) return 'ongoing';
   return 'not_done';
+}
+
+function toFirstName(displayName: string | null, slug: string | null) {
+  const source = displayName?.trim() || slug?.trim() || 'Unknown';
+  const firstByDash = source.split('-')[0]?.trim();
+  if (firstByDash) return firstByDash;
+  return source.split(' ')[0]?.trim() || source;
+}
+
+function formatLastSignIn(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString();
+}
+
+function mapEventLabel(eventType: string | null) {
+  if (!eventType) return 'No recent activity';
+  return EVENT_LABELS[eventType] ?? 'Updated mission data';
 }
 
 export function countTicketsByStatus(data?: TicketLike[] | null) {
@@ -78,21 +123,54 @@ export async function fetchDashboardMetrics() {
   };
 }
 
-export async function fetchRecentActivity() {
+export async function fetchAgentsOverview() {
   const supabase = createClient();
-  const [commentsRes, requestsRes] = await Promise.all([
-    supabase.from('mc_ticket_comments').select('id, body, created_at').order('created_at', { ascending: false }).limit(5),
-    supabase.from('mc_requests').select('id, request_type, status, created_at').order('created_at', { ascending: false }).limit(5)
+
+  const [agentsRes, mapRes, eventsRes, authUsersRes] = await Promise.all([
+    (supabase as any).from('mc_agents').select('id, display_name, slug, department, role, is_active').order('display_name', { ascending: true }),
+    (supabase as any).from('mc_agent_auth_map').select('agent_id, auth_user_id'),
+    (supabase as any).from('mc_ticket_events').select('actor_agent_id, event_type, created_at').order('created_at', { ascending: false }),
+    (supabase as any).schema('auth').from('users').select('id, last_sign_in_at')
   ]);
 
-  if (commentsRes.error) throw commentsRes.error;
-  if (requestsRes.error) throw requestsRes.error;
+  if (agentsRes.error) throw agentsRes.error;
+  if (mapRes.error && !isNoAccessError(mapRes.error.message)) throw mapRes.error;
+  if (eventsRes.error && !isNoAccessError(eventsRes.error.message)) throw eventsRes.error;
 
-  type RecentComment = { id: string; body: string; created_at: string };
-  type RecentRequest = { id: string; request_type: string; status: string; created_at: string };
+  const agents = (agentsRes.data ?? []) as AgentRecord[];
+  const maps = (mapRes.data ?? []) as AgentAuthMapRecord[];
+  const events = (eventsRes.data ?? []) as AgentEventRecord[];
 
-  return {
-    comments: (commentsRes.data as RecentComment[] | null) ?? [],
-    requests: (requestsRes.data as RecentRequest[] | null) ?? []
-  };
+  const authLastSignInByUserId = new Map<string, string | null>();
+  if (!authUsersRes.error) {
+    for (const authUser of (authUsersRes.data ?? []) as Array<{ id: string; last_sign_in_at: string | null }>) {
+      authLastSignInByUserId.set(authUser.id, authUser.last_sign_in_at);
+    }
+  }
+
+  const authUserIdByAgentId = new Map<string, string>();
+  for (const map of maps) {
+    authUserIdByAgentId.set(map.agent_id, map.auth_user_id);
+  }
+
+  const latestEventByAgentId = new Map<string, AgentEventRecord>();
+  for (const event of events) {
+    if (!event.actor_agent_id || latestEventByAgentId.has(event.actor_agent_id)) continue;
+    latestEventByAgentId.set(event.actor_agent_id, event);
+  }
+
+  return agents.map((agent) => {
+    const authUserId = authUserIdByAgentId.get(agent.id);
+    const latestEvent = latestEventByAgentId.get(agent.id);
+
+    return {
+      id: agent.id,
+      name: toFirstName(agent.display_name, agent.slug),
+      lastSignInLabel: formatLastSignIn(authUserId ? authLastSignInByUserId.get(authUserId) : null),
+      lastActivityLabel: latestEvent ? mapEventLabel(latestEvent.event_type) : 'No recent activity',
+      department: agent.department,
+      role: agent.role,
+      isActive: Boolean(agent.is_active)
+    };
+  });
 }

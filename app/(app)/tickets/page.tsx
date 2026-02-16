@@ -15,6 +15,7 @@ import type { TicketRowItem } from '@/components/ui/ticket-row';
 
 type TicketWithAgents = {
   id: string;
+  ticket_no: number | null;
   title: string;
   status: string;
   owner_agent_id: string | null;
@@ -28,25 +29,33 @@ async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('mc_tickets')
-    .select('id, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
+    .select('id, ticket_no, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
     .order('updated_at', { ascending: false });
   if (error) throw error;
 
   return ((data ?? []) as Array<
     Omit<TicketWithAgents, 'owner_name' | 'reporter_name'> & {
-      owner_agent: { display_name: string | null } | null;
-      reporter_agent: { display_name: string | null } | null;
+      owner_agent: { display_name: string | null } | { display_name: string | null }[] | null;
+      reporter_agent: { display_name: string | null } | { display_name: string | null }[] | null;
     }
   >).map((ticket) => ({
     id: ticket.id,
+    ticket_no: ticket.ticket_no,
     title: ticket.title,
     status: ticket.status,
     owner_agent_id: ticket.owner_agent_id,
     reporter_agent_id: ticket.reporter_agent_id,
     updated_at: ticket.updated_at,
-    owner_name: ticket.owner_agent?.display_name ?? null,
-    reporter_name: ticket.reporter_agent?.display_name ?? null
+    owner_name: relationDisplayName(ticket.owner_agent),
+    reporter_name: relationDisplayName(ticket.reporter_agent)
   }));
+}
+
+
+function relationDisplayName(value: { display_name: string | null } | { display_name: string | null }[] | null | undefined) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0]?.display_name ?? null;
+  return value.display_name ?? null;
 }
 
 const relativeTime = (dateValue: string | null) => {
@@ -120,9 +129,9 @@ export default function TicketsPage() {
   };
 
   const ticketRows = useMemo<TicketRowItem[]>(() => {
-    return ticketsData.map((ticket, index) => ({
+    return ticketsData.map((ticket) => ({
       id: ticket.id,
-      issueKey: `MC-${String(index + 101)}`,
+      issueKey: `MC-${ticket.ticket_no ?? '—'}`,
       summary: ticket.title,
       status: normalizeStatus(ticket.status),
       assignee: ticket.owner_name?.trim() || 'Unassigned',
@@ -258,7 +267,10 @@ export default function TicketsPage() {
       <CreateTicketModal
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onCreated={async () => {
+        onCreated={async (createdTicket) => {
+          if (createdTicket) {
+            setTicketsData((prev) => [createdTicket, ...prev]);
+          }
           await queryClient.invalidateQueries({ queryKey: ['tickets'] });
         }}
       />

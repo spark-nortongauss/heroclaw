@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/mission-control';
@@ -21,11 +22,11 @@ type ProjectRow = {
   ticket_count: number;
 };
 
-export default function ProjectsTableClient({ projects }: { projects: ProjectRow[] }) {
+export default function ProjectsTableClient({ projects, createAction }: { projects: ProjectRow[]; createAction?: ReactNode }) {
   const router = useRouter();
   const { notify } = useToast();
   const [rows, setRows] = useState(projects);
-  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'name'>('created_at');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -35,18 +36,18 @@ export default function ProjectsTableClient({ projects }: { projects: ProjectRow
   const statuses = useMemo(() => ['all', ...new Set(rows.map((project) => project.status ?? 'unknown'))], [rows]);
 
   const filtered = useMemo(() => {
-    const lowered = query.toLowerCase();
+    const lowered = search.toLowerCase();
     return rows
       .filter((project) => {
-        const matchesQuery = project.name.toLowerCase().includes(lowered) || (project.key ?? '').toLowerCase().includes(lowered);
+        const matchesSearch = project.name.toLowerCase().includes(lowered) || project.key.toLowerCase().includes(lowered);
         const matchesStatus = status === 'all' || (project.status ?? 'unknown') === status;
-        return matchesQuery && matchesStatus;
+        return matchesSearch && matchesStatus;
       })
       .sort((a, b) => {
         if (sortBy === 'name') return a.name.localeCompare(b.name);
         return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       });
-  }, [query, rows, sortBy, status]);
+  }, [rows, search, sortBy, status]);
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((project) => selectedIds.includes(project.id));
 
@@ -69,17 +70,20 @@ export default function ProjectsTableClient({ projects }: { projects: ProjectRow
 
   const handleDelete = async () => {
     setIsDeleting(true);
-    const supabase = createClient();
     const deletingIds = [...selectedIds];
+    const previous = [...rows];
+    setRows((prev) => prev.filter((project) => !deletingIds.includes(project.id)));
+
+    const supabase = createClient();
     const { error } = await supabase.from('mc_projects').delete().in('id', deletingIds);
     setIsDeleting(false);
 
     if (error) {
+      setRows(previous);
       notify(`Could not delete selected projects. ${error.message}`, 'error');
       return;
     }
 
-    setRows((prev) => prev.filter((project) => !deletingIds.includes(project.id)));
     setSelectedIds([]);
     setConfirmOpen(false);
     notify('Projects deleted successfully.');
@@ -87,41 +91,49 @@ export default function ProjectsTableClient({ projects }: { projects: ProjectRow
 
   return (
     <>
-      <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-3">
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by key or name" />
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger>
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statuses.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item === 'all' ? 'All statuses' : item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'created_at' | 'name')}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="created_at">Created date</SelectItem>
-              <SelectItem value="name">Name</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex justify-end">
-          <Button variant="destructive" disabled={selectedIds.length === 0} onClick={() => setConfirmOpen(true)}>
-            Delete
+      <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search projects"
+            className="max-w-xl"
+            aria-label="Search projects"
+          />
+          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-2">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger aria-label="Filter projects by status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {statuses.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item === 'all' ? 'All statuses' : item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'created_at' | 'name')}>
+              <SelectTrigger aria-label="Sort projects">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="created_at">Created date</SelectItem>
+                <SelectItem value="name">Name</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {createAction}
+          <Button variant="secondary" disabled={selectedIds.length === 0 || isDeleting} onClick={() => setConfirmOpen(true)}>
+            {isDeleting ? 'Deleting…' : 'Delete'}
           </Button>
         </div>
+      </div>
 
+      <div className="overflow-auto rounded-xl border border-border bg-card">
         <Table>
           <TableHead>
-            <TableRow>
+            <tr className="sticky top-0 z-10 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
               <TableHeaderCell className="w-10">
                 <input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleAllVisible(event.target.checked)} aria-label="Select all projects" />
               </TableHeaderCell>
@@ -129,14 +141,40 @@ export default function ProjectsTableClient({ projects }: { projects: ProjectRow
               <TableHeaderCell>Name</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
               <TableHeaderCell>Owner</TableHeaderCell>
-              <TableHeaderCell>Created At</TableHeaderCell>
+              <TableHeaderCell>Created</TableHeaderCell>
               <TableHeaderCell className="text-right">Tickets</TableHeaderCell>
-            </TableRow>
+            </tr>
           </TableHead>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7}>
+                  <Skeleton className="h-10 w-full" />
+                </TableCell>
+              </TableRow>
+            )}
+            {rows.length > 0 && filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                  No projects found.
+                </TableCell>
+              </TableRow>
+            )}
             {filtered.map((project) => (
-              <TableRow key={project.id} className="cursor-pointer" onClick={() => router.push(`/projects/${project.id}`)}>
-                <TableCell onClick={(event) => event.stopPropagation()}>
+              <TableRow
+                key={project.id}
+                tabIndex={0}
+                role="button"
+                className="group cursor-pointer border-t border-border/70 text-sm transition-all duration-200 hover:bg-muted/80 focus-within:bg-muted motion-reduce:transition-none"
+                onClick={() => router.push(`/projects/${project.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    router.push(`/projects/${project.id}`);
+                  }
+                }}
+              >
+                <TableCell className="py-2" onClick={(event) => event.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedIds.includes(project.id)}
@@ -145,14 +183,14 @@ export default function ProjectsTableClient({ projects }: { projects: ProjectRow
                     aria-label={`Select ${project.name}`}
                   />
                 </TableCell>
-                <TableCell className="font-medium">{project.key}</TableCell>
-                <TableCell>{project.name}</TableCell>
-                <TableCell>
+                <TableCell className="py-2 font-medium text-primary">{project.key}</TableCell>
+                <TableCell className="py-2 font-semibold text-foreground">{project.name}</TableCell>
+                <TableCell className="py-2">
                   <Badge variant="default">{project.status ?? 'unknown'}</Badge>
                 </TableCell>
-                <TableCell>{project.owner ?? 'Unassigned'}</TableCell>
-                <TableCell>{formatDate(project.created_at)}</TableCell>
-                <TableCell className="text-right">{project.ticket_count}</TableCell>
+                <TableCell className="py-2 text-xs text-muted-foreground">{project.owner ?? 'Unassigned'}</TableCell>
+                <TableCell className="py-2 text-xs text-muted-foreground">{formatDate(project.created_at)}</TableCell>
+                <TableCell className="py-2 text-right text-xs text-muted-foreground">{project.ticket_count}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -171,7 +209,7 @@ export default function ProjectsTableClient({ projects }: { projects: ProjectRow
               <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={isDeleting}>
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={() => void handleDelete()} disabled={isDeleting}>
+              <Button variant="secondary" className="text-destructive" onClick={() => void handleDelete()} disabled={isDeleting}>
                 {isDeleting ? 'Deleting…' : 'Delete projects'}
               </Button>
             </div>
