@@ -12,7 +12,7 @@ export default async function BoardPage({ searchParams }: { searchParams: { proj
     .order('created_at', { ascending: false });
 
   if (error) {
-    return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">Failed to load board projects: {error.message}</div>;
+    return <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">Failed to load board projects: {error.message}</div>;
   }
 
   const projects = (projectsData ?? []) as Array<{ id: string; key: string | null; name: string; status: string | null }>;

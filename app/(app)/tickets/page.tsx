@@ -19,7 +19,7 @@ type TicketWithAgents = {
   status: string;
   owner_agent_id: string | null;
   reporter_agent_id: string | null;
-  updated_at: string;
+  updated_at: string | null;
   owner_name: string | null;
   reporter_name: string | null;
 };
@@ -49,8 +49,11 @@ async function fetchTickets() {
   }));
 }
 
-const relativeTime = (dateValue: string) => {
+const relativeTime = (dateValue: string | null) => {
+  if (!dateValue) return 'Unknown';
   const timeMs = new Date(dateValue).getTime();
+  if (Number.isNaN(timeMs)) return 'Unknown';
+
   const diffMinutes = Math.round((timeMs - Date.now()) / 60000);
   const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
@@ -122,8 +125,8 @@ export default function TicketsPage() {
       issueKey: `MC-${String(index + 101)}`,
       summary: ticket.title,
       status: normalizeStatus(ticket.status),
-      assignee: ticket.owner_name ?? 'Unassigned',
-      reporter: ticket.reporter_name ?? 'Unknown',
+      assignee: ticket.owner_name?.trim() || 'Unassigned',
+      reporter: ticket.reporter_name?.trim() || 'Unknown',
       parent: null,
       updatedLabel: relativeTime(ticket.updated_at),
       priority: choosePriority(ticket.status)
@@ -225,10 +228,10 @@ export default function TicketsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button className="bg-[#D9FF35] text-[#172B4D] hover:bg-[#cde934]" onClick={() => setIsCreateModalOpen(true)}>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />Create Ticket
           </Button>
-          <Button variant="destructive" disabled={selectedIds.length === 0 || isDeleting} onClick={() => void handleDeleteSelected()}>
+          <Button variant="secondary" disabled={selectedIds.length === 0 || isDeleting} onClick={() => void handleDeleteSelected()}>
             {isDeleting ? 'Deleting…' : 'Delete'}
           </Button>
         </div>
