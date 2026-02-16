@@ -22,6 +22,11 @@ export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: stri
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:px-6">
+      {/*
+        Header interactivity playbook:
+        1) Any header control using state/events/window APIs must stay in a client component.
+        2) shadcn DropdownMenu must keep Trigger(asChild)+Content under the same Root.
+      */}
       <div className="flex items-center gap-2">
         <button className="rounded-md p-2 hover:bg-muted md:hidden" onClick={onOpenSidebar} aria-label="Open menu">
           <Menu className="h-5 w-5" />
@@ -30,7 +35,7 @@ export function Topbar({ email, onOpenSidebar, onToggleSidebar }: { email?: stri
           <PanelLeftClose className="h-4 w-4" />
         </button>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="relative z-40 flex items-center gap-3 pointer-events-auto">
         <NotificationBell />
         <LanguageSwitcher />
         <ThemeSwitcher />

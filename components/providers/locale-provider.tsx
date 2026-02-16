@@ -22,6 +22,7 @@ type LocaleContextValue = {
 };
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
+let hasWarnedMissingLocaleProvider = false;
 
 function interpolate(text: string, values?: TranslateValues) {
   if (!values) return text;
@@ -63,7 +64,18 @@ export function LocaleProvider({ children, initialLocale }: { children: ReactNod
 
 export function useLocale() {
   const context = useContext(LocaleContext);
-  if (!context) throw new Error('useLocale must be used within LocaleProvider');
+  if (!context) {
+    if (process.env.NODE_ENV !== 'production' && !hasWarnedMissingLocaleProvider) {
+      hasWarnedMissingLocaleProvider = true;
+      console.warn('[LocaleProvider] missing provider; locale switching is disabled.');
+    }
+    const fallback = getDictionary(DEFAULT_LOCALE);
+    return {
+      locale: DEFAULT_LOCALE,
+      setLocale: () => undefined,
+      t: (key: TranslationKey, values?: TranslateValues) => interpolate(fallback[key] || key, values)
+    };
+  }
   return context;
 }
 

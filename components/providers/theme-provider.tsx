@@ -11,6 +11,7 @@ type ThemeContextValue = {
 
 const STORAGE_KEY = 'mc-theme';
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+let hasWarnedMissingThemeProvider = false;
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
@@ -50,6 +51,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme() {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
+  if (!ctx) {
+    if (process.env.NODE_ENV !== 'production' && !hasWarnedMissingThemeProvider) {
+      hasWarnedMissingThemeProvider = true;
+      console.warn('[ThemeProvider] missing provider; theme switching is disabled.');
+    }
+    return {
+      theme: 'system' as Theme,
+      setTheme: () => undefined
+    };
+  }
   return ctx;
 }
