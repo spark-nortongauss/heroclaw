@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/mission-control';
+import { useLocale } from '@/components/providers/locale-provider';
 
 type ProjectRow = {
   id: string;
@@ -22,9 +23,57 @@ type ProjectRow = {
   ticket_count: number;
 };
 
+async function fetchProjects() {
+  const supabase = createClient();
+  const { data: projectsData, error } = await supabase
+    .from('mc_projects')
+    .select('id, key, name, status, created_at, owner_agent:mc_agents!mc_projects_owner_agent_id_fkey(display_name)')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  const projects = (projectsData ?? []) as Array<{
+    id: string;
+    key: string;
+    name: string;
+    status: string | null;
+    created_at: string | null;
+    owner_agent: { display_name: string | null } | { display_name: string | null }[] | null;
+  }>;
+
+  const ids = projects.map((project) => project.id);
+  let ticketCountMap = new Map<string, number>();
+
+  if (ids.length > 0) {
+    const { data: ticketRows, error: ticketError } = await supabase
+      .from('mc_tickets')
+      .select('project_id')
+      .in('project_id', ids);
+
+    if (!ticketError) {
+      ticketCountMap = (ticketRows ?? []).reduce((map, row) => {
+        const projectId = (row as { project_id: string | null }).project_id;
+        if (projectId) map.set(projectId, (map.get(projectId) ?? 0) + 1);
+        return map;
+      }, new Map<string, number>());
+    }
+  }
+
+  return projects.map((project) => ({
+    id: project.id,
+    key: project.key,
+    name: project.name,
+    status: project.status,
+    owner: Array.isArray(project.owner_agent) ? project.owner_agent[0]?.display_name ?? null : project.owner_agent?.display_name ?? null,
+    created_at: project.created_at,
+    ticket_count: ticketCountMap.get(project.id) ?? 0
+  }));
+}
+
 export default function ProjectsTableClient({ projects, createAction }: { projects: ProjectRow[]; createAction?: ReactNode }) {
   const router = useRouter();
   const { notify } = useToast();
+  const { t } = useLocale();
   const [rows, setRows] = useState(projects);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -69,24 +118,47 @@ export default function ProjectsTableClient({ projects, createAction }: { projec
   };
 
   const handleDelete = async () => {
+    if (selectedIds.length === 0) return;
+
     setIsDeleting(true);
     const deletingIds = [...selectedIds];
-    const previous = [...rows];
-    setRows((prev) => prev.filter((project) => !deletingIds.includes(project.id)));
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[projects.delete] payload', { deletingIds });
+    }
 
     const supabase = createClient();
-    const { error } = await supabase.from('mc_projects').delete().in('id', deletingIds);
-    setIsDeleting(false);
+    const { data: deletedRows, error } = await supabase.from('mc_projects').delete().in('id', deletingIds).select('id');
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[projects.delete] response', { deletedRows, error });
+    }
 
     if (error) {
-      setRows(previous);
-      notify(`Could not delete selected projects. ${error.message}`, 'error');
+      setIsDeleting(false);
+      const isForeignKeyBlock = error.code === '23503' || /foreign key|violates|constraint/i.test(error.message);
+      if (isForeignKeyBlock) {
+        notify(t('toast.projectDeleteBlockedTickets'), 'error');
+      } else {
+        notify(`${t('toast.deleteFailed')} ${error.message}`, 'error');
+      }
       return;
     }
 
+    const deletedCount = (deletedRows ?? []).length;
+    if (deletedCount !== deletingIds.length) {
+      setIsDeleting(false);
+      notify(`${t('toast.deleteFailed')} ${deletedCount}/${deletingIds.length} removed.`, 'error');
+      return;
+    }
+
+    const refreshedRows = await fetchProjects();
+    setRows(refreshedRows);
     setSelectedIds([]);
     setConfirmOpen(false);
-    notify('Projects deleted successfully.');
+    setIsDeleting(false);
+    notify(t('toast.deleted'));
+    router.refresh();
   };
 
   return (
@@ -96,36 +168,36 @@ export default function ProjectsTableClient({ projects, createAction }: { projec
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search projects"
+            placeholder={t('projects.search')}
             className="max-w-xl"
-            aria-label="Search projects"
+            aria-label={t('projects.search')}
           />
           <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-2">
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger aria-label="Filter projects by status">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger aria-label={t('projects.filterStatus')}>
+                <SelectValue placeholder={t('common.status')} />
               </SelectTrigger>
               <SelectContent>
                 {statuses.map((item) => (
                   <SelectItem key={item} value={item}>
-                    {item === 'all' ? 'All statuses' : item}
+                    {item === 'all' ? t('tickets.allStatuses') : item}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'created_at' | 'name')}>
-              <SelectTrigger aria-label="Sort projects">
+              <SelectTrigger aria-label={t('projects.sort')}>
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="created_at">Created date</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="created_at">{t('projects.createdDate')}</SelectItem>
+                <SelectItem value="name">{t('projects.name')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {createAction}
           <Button variant="secondary" disabled={selectedIds.length === 0 || isDeleting} onClick={() => setConfirmOpen(true)}>
-            {isDeleting ? 'Deleting…' : 'Delete'}
+            {isDeleting ? 'Deleting…' : t('common.delete')}
           </Button>
         </div>
       </div>
@@ -138,10 +210,10 @@ export default function ProjectsTableClient({ projects, createAction }: { projec
                 <input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleAllVisible(event.target.checked)} aria-label="Select all projects" />
               </TableHeaderCell>
               <TableHeaderCell>Key</TableHeaderCell>
-              <TableHeaderCell>Name</TableHeaderCell>
-              <TableHeaderCell>Status</TableHeaderCell>
-              <TableHeaderCell>Owner</TableHeaderCell>
-              <TableHeaderCell>Created</TableHeaderCell>
+              <TableHeaderCell>{t('projects.name')}</TableHeaderCell>
+              <TableHeaderCell>{t('common.status')}</TableHeaderCell>
+              <TableHeaderCell>{t('common.assignee')}</TableHeaderCell>
+              <TableHeaderCell>{t('projects.createdDate')}</TableHeaderCell>
               <TableHeaderCell className="text-right">Tickets</TableHeaderCell>
             </tr>
           </TableHead>
@@ -156,7 +228,7 @@ export default function ProjectsTableClient({ projects, createAction }: { projec
             {rows.length > 0 && filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
-                  No projects found.
+                  {t('projects.empty')}
                 </TableCell>
               </TableRow>
             )}
@@ -200,17 +272,14 @@ export default function ProjectsTableClient({ projects, createAction }: { projec
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg space-y-3 rounded-xl border bg-card p-4 shadow-lg">
-            <h3 className="text-lg font-semibold">Delete selected projects?</h3>
-            <p className="text-sm text-mutedForeground">
-              This will permanently delete {selectedIds.length} selected project(s). Tickets linked to these projects may still exist; if database foreign-key
-              constraints block deletion, those projects will be kept.
-            </p>
+            <h3 className="text-lg font-semibold">{t('projects.deleteSelectedTitle')}</h3>
+            <p className="text-sm text-muted-foreground">{t('projects.deleteSelectedDescription', { count: selectedIds.length })}</p>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={isDeleting}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button variant="secondary" className="text-destructive" onClick={() => void handleDelete()} disabled={isDeleting}>
-                {isDeleting ? 'Deleting…' : 'Delete projects'}
+                {isDeleting ? 'Deleting…' : t('projects.deleteButton')}
               </Button>
             </div>
           </div>

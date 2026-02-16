@@ -1,7 +1,7 @@
 'use client';
 
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useTheme } from '@/components/providers/theme-provider';
 
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -18,11 +18,8 @@ export function ThemeSwitcher() {
 
   return (
     <Select value={theme} onValueChange={(value) => setTheme(value as ThemeOption)}>
-      <SelectTrigger className="w-[132px]" aria-label="Theme">
-        <span className="inline-flex items-center gap-2">
-          <current.Icon className="h-3.5 w-3.5" />
-          <SelectValue placeholder="Theme" />
-        </span>
+      <SelectTrigger className="h-9 w-9 px-0" aria-label={`Theme: ${current.label}`} title={current.label}>
+        <current.Icon className="mx-auto h-4 w-4" />
       </SelectTrigger>
       <SelectContent>
         {(Object.keys(themeMeta) as ThemeOption[]).map((key) => {

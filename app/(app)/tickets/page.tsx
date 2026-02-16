@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TicketTable } from '@/components/ui/ticket-table';
 import CreateTicketModal from './CreateTicketModal';
 import type { TicketRowItem } from '@/components/ui/ticket-row';
+import { useLocale } from '@/components/providers/locale-provider';
 
 type TicketWithAgents = {
   id: string;
@@ -51,7 +52,6 @@ async function fetchTickets() {
   }));
 }
 
-
 function relationDisplayName(value: { display_name: string | null } | { display_name: string | null }[] | null | undefined) {
   if (!value) return null;
   if (Array.isArray(value)) return value[0]?.display_name ?? null;
@@ -89,6 +89,7 @@ const choosePriority = (status: string): TicketRowItem['priority'] => {
 export default function TicketsPage() {
   const router = useRouter();
   const { notify } = useToast();
+  const { t } = useLocale();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -97,6 +98,7 @@ export default function TicketsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [ticketsData, setTicketsData] = useState<TicketWithAgents[]>([]);
   const attachmentCountCache = useRef<Map<string, number>>(new Map());
@@ -175,25 +177,39 @@ export default function TicketsPage() {
   };
 
   const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0 || !window.confirm(`Delete ${selectedIds.length} selected ticket(s)?`)) return;
+    if (selectedIds.length === 0) return;
 
     setIsDeleting(true);
     const deletingIds = [...selectedIds];
-    const previousData = [...ticketsData];
-    setTicketsData((prev) => prev.filter((ticket) => !deletingIds.includes(ticket.id)));
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[tickets.delete] payload', { deletingIds });
+    }
 
     const supabase = createClient();
-    const { error } = await supabase.from('mc_tickets').delete().in('id', deletingIds);
+    const { data: deletedRows, error } = await supabase.from('mc_tickets').delete().in('id', deletingIds).select('id');
     setIsDeleting(false);
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[tickets.delete] response', { deletedRows, error });
+    }
+
     if (error) {
-      setTicketsData(previousData);
-      notify(`Delete failed: ${error.message}`, 'error');
+      notify(`${t('toast.deleteFailed')} ${error.message}`, 'error');
+      return;
+    }
+
+    const deletedIds = (deletedRows ?? []).map((item) => item.id);
+    if (deletedIds.length !== deletingIds.length) {
+      notify(`${t('toast.deleteFailed')} ${deletedIds.length}/${deletingIds.length} removed.`, 'error');
       return;
     }
 
     setSelectedIds([]);
-    notify('Ticket(s) deleted.');
+    setConfirmOpen(false);
+    notify(t('toast.deleted'));
+    const refreshed = await queryClient.fetchQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
+    setTicketsData(refreshed);
     await queryClient.invalidateQueries({ queryKey: ['tickets'] });
     router.refresh();
   };
@@ -201,35 +217,35 @@ export default function TicketsPage() {
   return (
     <div className="page-transition space-y-4">
       <div>
-        <h1 className="h1 font-[var(--font-heading)]">Tickets</h1>
-        <p className="text-body">Track tickets and monitor status transitions.</p>
+        <h1 className="h1 font-[var(--font-heading)]">{t('tickets.title')}</h1>
+        <p className="text-body">{t('tickets.subtitle')}</p>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <Input placeholder="Search issues" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xl" aria-label="Search issues" />
+          <Input placeholder={t('tickets.searchIssues')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xl" aria-label={t('tickets.searchIssues')} />
           <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-3">
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger aria-label={t('tickets.filterStatus')}><SelectValue placeholder={t('common.status')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="all">{t('tickets.allStatuses')}</SelectItem>
                 <SelectItem value="not_done">To Do</SelectItem>
                 <SelectItem value="ongoing">In Progress</SelectItem>
                 <SelectItem value="done">Done</SelectItem>
               </SelectContent>
             </Select>
             <Select value={assignee} onValueChange={setAssignee}>
-              <SelectTrigger aria-label="Filter by assignee"><SelectValue placeholder="Assignee" /></SelectTrigger>
+              <SelectTrigger aria-label={t('tickets.filterAssignee')}><SelectValue placeholder={t('common.assignee')} /></SelectTrigger>
               <SelectContent>
                 {assignees.map((item) => (
-                  <SelectItem key={item} value={item}>{item === 'all' ? 'All assignees' : item}</SelectItem>
+                  <SelectItem key={item} value={item}>{item === 'all' ? t('tickets.allAssignees') : item}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger aria-label="Filter by priority"><SelectValue placeholder="Priority" /></SelectTrigger>
+              <SelectTrigger aria-label={t('tickets.filterPriority')}><SelectValue placeholder={t('common.priority')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All priorities</SelectItem>
+                <SelectItem value="all">{t('tickets.allPriorities')}</SelectItem>
                 <SelectItem value="highest">Highest</SelectItem>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
@@ -238,10 +254,10 @@ export default function TicketsPage() {
             </Select>
           </div>
           <Button onClick={() => setIsCreateModalOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />Create Ticket
+            <Plus className="mr-1 h-4 w-4" />{t('tickets.createTicket')}
           </Button>
-          <Button variant="secondary" disabled={selectedIds.length === 0 || isDeleting} onClick={() => void handleDeleteSelected()}>
-            {isDeleting ? 'Deleting…' : 'Delete'}
+          <Button variant="secondary" disabled={selectedIds.length === 0 || isDeleting} onClick={() => setConfirmOpen(true)}>
+            {isDeleting ? 'Deleting…' : t('common.delete')}
           </Button>
         </div>
       </div>
@@ -258,6 +274,7 @@ export default function TicketsPage() {
         attachmentCounts={attachmentCounts}
         loadingAttachmentIds={loadingAttachmentIds}
         onAttachmentHover={loadAttachmentCount}
+        emptyText={t('tickets.empty')}
         onAttachmentClick={(id) => {
           setSelectedId(id);
           router.push(`/tickets/${id}#attachments`);
@@ -274,6 +291,23 @@ export default function TicketsPage() {
           await queryClient.invalidateQueries({ queryKey: ['tickets'] });
         }}
       />
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg space-y-3 rounded-xl border bg-card p-4 shadow-lg">
+            <h3 className="text-lg font-semibold">{t('tickets.deleteSelectedTitle')}</h3>
+            <p className="text-sm text-muted-foreground">{t('tickets.deleteSelectedDescription', { count: selectedIds.length })}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={isDeleting}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="secondary" className="text-destructive" onClick={() => void handleDeleteSelected()} disabled={isDeleting}>
+                {isDeleting ? 'Deleting…' : t('tickets.deleteButton')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

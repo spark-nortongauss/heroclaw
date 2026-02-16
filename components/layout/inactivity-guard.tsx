@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
+import { useLocale } from '@/components/providers/locale-provider';
 
 const INACTIVITY_MS = 15 * 60 * 1000;
 const EVENT_NAMES: Array<keyof WindowEventMap> = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
@@ -11,6 +12,7 @@ const EVENT_NAMES: Array<keyof WindowEventMap> = ['mousemove', 'keydown', 'click
 export function InactivityGuard() {
   const router = useRouter();
   const { notify } = useToast();
+  const { t } = useLocale();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const throttleRef = useRef(0);
 
@@ -19,7 +21,7 @@ export function InactivityGuard() {
 
     const onTimeout = async () => {
       await supabase.auth.signOut();
-      notify('Signed out due to inactivity', 'error');
+      notify(t('toast.signedOutInactivity'), 'error');
       router.replace('/login');
       router.refresh();
     };
@@ -47,7 +49,7 @@ export function InactivityGuard() {
       EVENT_NAMES.forEach((eventName) => window.removeEventListener(eventName, throttledReset));
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [notify, router]);
+  }, [notify, router, t]);
 
   return null;
 }
