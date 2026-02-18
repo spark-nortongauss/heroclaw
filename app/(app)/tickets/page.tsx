@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { logSupabaseError } from '@/lib/supabase/log-error';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,13 +27,23 @@ type TicketWithAgents = {
   reporter_name: string | null;
 };
 
+function relationDisplayName(value: { display_name: string | null } | { display_name: string | null }[] | null | undefined) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0]?.display_name ?? null;
+  return value.display_name ?? null;
+}
+
 async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('mc_tickets')
     .select('id, ticket_no, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
     .order('updated_at', { ascending: false });
-  if (error) throw error;
+
+  if (error) {
+    logSupabaseError('mc_tickets', error, 'tickets.fetch');
+    return [];
+  }
 
   return ((data ?? []) as Array<
     Omit<TicketWithAgents, 'owner_name' | 'reporter_name'> & {
@@ -50,12 +61,6 @@ async function fetchTickets() {
     owner_name: relationDisplayName(ticket.owner_agent),
     reporter_name: relationDisplayName(ticket.reporter_agent)
   }));
-}
-
-function relationDisplayName(value: { display_name: string | null } | { display_name: string | null }[] | null | undefined) {
-  if (!value) return null;
-  if (Array.isArray(value)) return value[0]?.display_name ?? null;
-  return value.display_name ?? null;
 }
 
 const relativeTime = (dateValue: string | null) => {
@@ -101,13 +106,37 @@ export default function TicketsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [ticketsData, setTicketsData] = useState<TicketWithAgents[]>([]);
+  const [isSessionReady, setIsSessionReady] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const attachmentCountCache = useRef<Map<string, number>>(new Map());
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [loadingAttachmentIds, setLoadingAttachmentIds] = useState<Record<string, boolean>>({});
-  const { data = [], isLoading } = useQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
 
   useEffect(() => {
-    setTicketsData(data);
+    let mounted = true;
+    const supabase = createClient();
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) {
+        logSupabaseError('auth.sessions', error, 'tickets.getSession');
+      }
+      setIsAuthenticated(Boolean(data.session));
+      setIsSessionReady(true);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const { data = [], isLoading, isFetching } = useQuery({
+    queryKey: ['tickets'],
+    queryFn: fetchTickets,
+    enabled: isSessionReady && isAuthenticated
+  });
+
+  useEffect(() => {
+    setTicketsData(data ?? []);
   }, [data]);
 
   const loadAttachmentCount = async (ticketId: string) => {
@@ -181,38 +210,70 @@ export default function TicketsPage() {
 
     setIsDeleting(true);
     const deletingIds = [...selectedIds];
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[tickets.delete] payload', { deletingIds });
-    }
-
     const supabase = createClient();
-    const { data: deletedRows, error } = await supabase.from('mc_tickets').delete().in('id', deletingIds).select('id');
-    setIsDeleting(false);
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[tickets.delete] response', { deletedRows, error });
-    }
+    const { error } = await supabase.from('mc_tickets').delete().in('id', deletingIds);
 
     if (error) {
+      logSupabaseError('mc_tickets', error, 'tickets.delete');
+      setIsDeleting(false);
       notify(`${t('toast.deleteFailed')} ${error.message}`, 'error');
       return;
     }
 
-    const deletedIds = (deletedRows ?? []).map((item) => item.id);
-    if (deletedIds.length !== deletingIds.length) {
-      notify(`${t('toast.deleteFailed')} ${deletedIds.length}/${deletingIds.length} removed.`, 'error');
+    const refreshed = await queryClient.fetchQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
+    setIsDeleting(false);
+
+    const deletedSet = new Set(deletingIds);
+    const stillPresent = refreshed.filter((ticket) => deletedSet.has(ticket.id)).map((ticket) => ticket.id);
+    if (stillPresent.length > 0) {
+      notify(`${t('toast.deleteFailed')} ${stillPresent.length}/${deletingIds.length} blocked by policy.`, 'error');
       return;
     }
 
+    setTicketsData(refreshed);
     setSelectedIds([]);
     setConfirmOpen(false);
     notify(t('toast.deleted'));
-    const refreshed = await queryClient.fetchQuery({ queryKey: ['tickets'], queryFn: fetchTickets });
-    setTicketsData(refreshed);
     await queryClient.invalidateQueries({ queryKey: ['tickets'] });
     router.refresh();
   };
+
+  if (!isSessionReady) {
+    return (
+      <div className="page-transition space-y-4">
+        <div>
+          <h1 className="h1 font-[var(--font-heading)]">{t('tickets.title')}</h1>
+          <p className="text-body">{t('tickets.subtitle')}</p>
+        </div>
+        <TicketTable
+          tickets={[]}
+          loading
+          selectedId={null}
+          onSelect={() => {}}
+          selectedIds={[]}
+          allVisibleSelected={false}
+          onToggleSelectAll={() => {}}
+          onToggleTicket={() => {}}
+          attachmentCounts={{}}
+          loadingAttachmentIds={{}}
+          onAttachmentHover={() => {}}
+          emptyText={t('tickets.empty')}
+        />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="page-transition space-y-4">
+        <div>
+          <h1 className="h1 font-[var(--font-heading)]">{t('tickets.title')}</h1>
+          <p className="text-body">Please sign in to view tickets.</p>
+        </div>
+        <Button onClick={() => router.push('/login')}>Go to login</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="page-transition space-y-4">
@@ -264,7 +325,7 @@ export default function TicketsPage() {
 
       <TicketTable
         tickets={filtered}
-        loading={isLoading}
+        loading={isLoading || isFetching}
         selectedId={selectedId}
         onSelect={setSelectedId}
         selectedIds={selectedIds}

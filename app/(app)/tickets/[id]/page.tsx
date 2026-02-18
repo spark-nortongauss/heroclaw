@@ -130,7 +130,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
       )
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true }),
-    (supabase as any).from('mc_agents').select('*').order('name', { ascending: true })
+    (supabase as any).from('mc_agents').select('*').order('display_name', { ascending: true })
     ,(supabase as any).from('mc_artifacts').select('id, title, kind, created_at').eq('ticket_id', ticket.id).order('created_at', { ascending: false })
   ]);
 
