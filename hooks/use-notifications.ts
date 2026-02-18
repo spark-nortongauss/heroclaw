@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { logSupabaseError } from '@/lib/supabase/log-error';
 
 export type AppNotification = {
   id: string;
@@ -73,12 +74,18 @@ export function useNotifications() {
     setError(null);
     try {
       const [ticketEventsRes, projectsRes, agentsRes, inboxRes, requestsRes] = await Promise.all([
-        supabase.from('mc_ticket_events').select('id, event_type, created_at, ticket_id, after').order('created_at', { ascending: false }).limit(12),
+        supabase.from('mc_ticket_events').select('*').limit(12),
         supabase.from('mc_projects').select('id, key, name, created_at').order('created_at', { ascending: false }).limit(12),
-        supabase.from('mc_agents').select('id, display_name, updated_at, created_at').order('updated_at', { ascending: false }).limit(12),
-        supabase.from('mc_inbox').select('id, kind, subject, body, created_at').order('created_at', { ascending: false }).limit(12),
+        supabase.from('mc_agents').select('*').limit(12),
+        supabase.from('mc_inbox').select('*').limit(12),
         supabase.from('mc_requests').select('id, request_type, status, created_at, result').order('created_at', { ascending: false }).limit(12)
       ]);
+
+      logSupabaseError('mc_ticket_events', ticketEventsRes.error, 'notifications.refresh');
+      logSupabaseError('mc_projects', projectsRes.error, 'notifications.refresh');
+      logSupabaseError('mc_agents', agentsRes.error, 'notifications.refresh');
+      logSupabaseError('mc_inbox', inboxRes.error, 'notifications.refresh');
+      logSupabaseError('mc_requests', requestsRes.error, 'notifications.refresh');
 
       const next: AppNotification[] = [];
 
