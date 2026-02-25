@@ -129,15 +129,21 @@ export default function TicketsPage() {
     };
   }, []);
 
-  const { data = [], isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['tickets'],
     queryFn: fetchTickets,
     enabled: isSessionReady && isAuthenticated
   });
 
   useEffect(() => {
-    setTicketsData(data ?? []);
+    if (!data) return;
+    setTicketsData(data);
   }, [data]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setTicketsData([]);
+  }, [isAuthenticated]);
 
   const loadAttachmentCount = async (ticketId: string) => {
     if (attachmentCountCache.current.has(ticketId) || loadingAttachmentIds[ticketId]) return;
