@@ -103,7 +103,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
     return (
       <main className="space-y-4 p-6">
         <h1 className="text-xl font-semibold text-red-600">Failed to load ticket details.</h1>
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-mutedForeground">
           Supabase error: <span className="font-mono">{error.message}</span>
         </p>
         <Link className="inline-block text-sm underline" href="/tickets">
@@ -160,12 +160,12 @@ export default async function TicketDetailPage({ params }: PageProps) {
     .filter((agent): agent is { id: string; label: string; department: string | null } => Boolean(agent.label));
 
   return (
-    <main className="space-y-5 bg-white p-4 sm:p-6">
-      <Link className="inline-flex text-xs font-medium uppercase tracking-wide text-[#808080] hover:text-[#111111]" href="/tickets">
+    <main className="space-y-5 bg-card p-4 sm:p-6">
+      <Link className="inline-flex text-xs font-medium uppercase tracking-wide text-mutedForeground hover:text-foreground" href="/tickets">
         ← Back to tickets
       </Link>
 
-      <section className="rounded-lg border border-border bg-white p-3">
+      <section className="rounded-lg border border-border bg-card p-3">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">Ticket metadata</p>
         <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
           <p>Ticket No: {ticket.ticket_no ?? '—'}</p>
@@ -188,7 +188,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
 
       <TicketDetailClient agents={agents} comments={comments} ticket={ticket} />
 
-      <section className="rounded-lg border border-border bg-white p-3">
+      <section className="rounded-lg border border-border bg-card p-3">
         <h2 className="text-sm font-semibold">Artifacts</h2>
         <div className="mt-2 space-y-1 text-sm">
           {(artifactsData ?? []).length === 0 && <p className="text-muted-foreground">No artifacts linked.</p>}
