@@ -12,6 +12,7 @@ type CreateTicketPayload = {
   due_at?: string | null;
   labels?: string[] | null;
   parent_ticket_id?: string | null;
+  project_id?: string | null;
   context?: Json | null;
 };
 
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
     due_at: body.due_at ?? null,
     labels: body.labels ?? null,
     parent_ticket_id: body.parent_ticket_id ?? null,
+    project_id: body.project_id ?? null,
     context: body.context ?? null
   });
 
