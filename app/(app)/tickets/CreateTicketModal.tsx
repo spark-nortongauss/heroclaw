@@ -21,6 +21,12 @@ type ParentTicketOption = {
   status: string | null;
 };
 
+type ProjectOption = {
+  id: string;
+  key: string;
+  name: string;
+};
+
 type CreateTicketModalProps = {
   open: boolean;
   onClose: () => void;
@@ -70,9 +76,13 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
   const [labels, setLabels] = useState('');
   const [parentTicketId, setParentTicketId] = useState<string | null>(null);
   const [parentQuery, setParentQuery] = useState('');
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectQuery, setProjectQuery] = useState('');
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [contextText, setContextText] = useState('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [parentSuggestions, setParentSuggestions] = useState<ParentTicketOption[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [reporterAgentId, setReporterAgentId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSearchingParents, setIsSearchingParents] = useState(false);
@@ -94,6 +104,18 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
           return;
         }
         setAgents((data ?? []) as AgentOption[]);
+      });
+
+    void supabase
+      .from('mc_projects')
+      .select('id, key, name')
+      .order('name', { ascending: true })
+      .then(({ data, error: projectError }) => {
+        if (projectError) {
+          setError(projectError.message);
+          return;
+        }
+        setProjects((data ?? []) as ProjectOption[]);
       });
 
     void supabase.auth.getUser().then(async ({ data: authData, error: authError }) => {
@@ -156,6 +178,16 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
   }, [open, parentQuery]);
 
   const showSuggestions = useMemo(() => parentQuery.trim().length > 0, [parentQuery]);
+  const filteredProjects = useMemo(() => {
+    const query = projectQuery.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter((project) => project.name.toLowerCase().includes(query) || project.key.toLowerCase().includes(query));
+  }, [projectQuery, projects]);
+  const selectedProjectLabel = useMemo(() => {
+    if (!projectId) return 'No project';
+    const selected = projects.find((project) => project.id === projectId);
+    return selected ? `${selected.key} · ${selected.name}` : 'Unknown project';
+  }, [projectId, projects]);
 
   const resetForm = () => {
     setTitle('');
@@ -167,6 +199,9 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
     setLabels('');
     setParentTicketId(null);
     setParentQuery('');
+    setProjectId(null);
+    setProjectQuery('');
+    setIsProjectDropdownOpen(false);
     setContextText('');
     setError(null);
     setIsSubmitting(false);
@@ -220,6 +255,7 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
         reporter_agent_id: reporterAgentId,
         due_at: dueAt ? new Date(`${dueAt}T00:00:00.000Z`).toISOString() : null,
         labels: normalizedLabels.length > 0 ? normalizedLabels : null,
+        project_id: projectId,
         parent_ticket_id: parentTicketId,
         context
       })
@@ -305,6 +341,57 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
               <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Due date</label>
               <Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
             </div>
+          </div>
+
+          <div className="relative">
+            <label className="mb-1 block text-sm font-medium text-[#172B4D] dark:text-foreground">Project</label>
+            <button
+              type="button"
+              className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-left text-sm"
+              onClick={() => setIsProjectDropdownOpen((current) => !current)}
+            >
+              {selectedProjectLabel}
+            </button>
+
+            {isProjectDropdownOpen && (
+              <div className="absolute z-20 mt-1 w-full rounded-md border bg-card p-2 shadow-lg">
+                <Input
+                  value={projectQuery}
+                  onChange={(event) => setProjectQuery(event.target.value)}
+                  placeholder="Search projects"
+                  className="mb-2"
+                />
+                <div className="max-h-52 overflow-auto">
+                  <button
+                    type="button"
+                    className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      setProjectId(null);
+                      setProjectQuery('');
+                      setIsProjectDropdownOpen(false);
+                    }}
+                  >
+                    No project
+                  </button>
+                  {filteredProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                      onClick={() => {
+                        setProjectId(project.id);
+                        setProjectQuery('');
+                        setIsProjectDropdownOpen(false);
+                      }}
+                    >
+                      {project.key} · {project.name}
+                    </button>
+                  ))}
+                  {filteredProjects.length === 0 && <p className="px-2 py-1.5 text-xs text-mutedForeground">No projects found.</p>}
+                </div>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-mutedForeground">Optional. Assign this ticket to a project.</p>
           </div>
 
           <div>
