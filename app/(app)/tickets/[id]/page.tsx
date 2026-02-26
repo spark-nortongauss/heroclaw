@@ -51,6 +51,16 @@ type CommentRow = {
   author: AgentRef | AgentRef[] | null;
 };
 
+type ArtifactRow = {
+  id: string;
+  name: string | null;
+  filename: string | null;
+  kind: string | null;
+  created_at: string | null;
+  url: string | null;
+  object_path: string | null;
+};
+
 const asAgent = (value: AgentRef | AgentRef[] | null | undefined): AgentRef | null => {
   if (!value) return null;
   return Array.isArray(value) ? value[0] ?? null : value;
@@ -117,7 +127,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [{ data: commentsData }, { data: agentsData }, { data: artifactsData }] = await Promise.all([
+  const [{ data: commentsData }, { data: agentsData }, { data: artifactsData, error: artifactsError }] = await Promise.all([
     (supabase as any)
       .from('mc_ticket_comments')
       .select(
@@ -130,8 +140,12 @@ export default async function TicketDetailPage({ params }: PageProps) {
       )
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true }),
-    (supabase as any).from('mc_agents').select('*').order('display_name', { ascending: true })
-    ,(supabase as any).from('mc_artifacts').select('id, title, kind, created_at').eq('ticket_id', ticket.id).order('created_at', { ascending: false })
+    (supabase as any).from('mc_agents').select('*').order('display_name', { ascending: true }),
+    (supabase as any)
+      .from('mc_artifacts')
+      .select('id, name, filename, kind, created_at, url, object_path')
+      .eq('ticket_id', ticket.id)
+      .order('created_at', { ascending: false })
   ]);
 
   const comments = ((commentsData ?? []) as CommentRow[]).map((comment) => {
@@ -158,6 +172,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
       department: agent.department ?? null
     }))
     .filter((agent): agent is { id: string; label: string; department: string | null } => Boolean(agent.label));
+
+  const artifacts = (artifactsData ?? []) as ArtifactRow[];
 
   return (
     <main className="space-y-5 bg-card p-4 sm:p-6">
@@ -191,9 +207,19 @@ export default async function TicketDetailPage({ params }: PageProps) {
       <section className="rounded-lg border border-border bg-card p-3">
         <h2 className="text-sm font-semibold">Artifacts</h2>
         <div className="mt-2 space-y-1 text-sm">
-          {(artifactsData ?? []).length === 0 && <p className="text-muted-foreground">No artifacts linked.</p>}
-          {(artifactsData ?? []).map((artifact: any) => (
-            <p key={artifact.id}>{artifact.title ?? artifact.kind ?? artifact.id}</p>
+          {artifactsError && <p className="text-red-600">Failed to load artifacts: {artifactsError.message}</p>}
+          {!artifactsError && artifacts.length === 0 && <p className="text-muted-foreground">No artifacts linked.</p>}
+          {artifacts.map((artifact) => (
+            <p key={artifact.id}>
+              {artifact.url ? (
+                <a className="underline" href={artifact.url} rel="noreferrer" target="_blank">
+                  {artifact.name ?? artifact.filename ?? artifact.kind ?? artifact.id}
+                </a>
+              ) : (
+                artifact.name ?? artifact.filename ?? artifact.kind ?? artifact.id
+              )}
+              {artifact.object_path ? <span className="text-muted-foreground"> · {artifact.object_path}</span> : null}
+            </p>
           ))}
         </div>
       </section>
