@@ -243,16 +243,33 @@ export default function TicketDetailClient({ ticket, comments, agents }: TicketD
 
     referenceSearchTimeoutRef.current = window.setTimeout(() => {
       const supabase = createClient();
+      const query = referenceQuery.trim();
+      const escaped = query.replaceAll('%', '\\%').replaceAll('_', '\\_');
       setReferenceSearchPending(true);
-      void supabase
+      let request = supabase
         .from('mc_tickets')
         .select('id, ticket_no, title, status')
         .neq('id', ticket.id)
         .not('status', 'in', '(done,closed)')
-        .or(`title.ilike.%${referenceQuery}%,ticket_no::text.ilike.%${referenceQuery}%`)
         .order('updated_at', { ascending: false })
-        .limit(10)
-        .then(({ data }) => {
+        .limit(10);
+
+      if (query) {
+        const numeric = query.match(/\d+/)?.[0];
+        if (numeric) {
+          request = request.or(`ticket_no.eq.${numeric},title.ilike.%${escaped}%`);
+        } else {
+          request = request.ilike('title', `%${escaped}%`);
+        }
+      }
+
+      void request
+        .then(({ data, error }) => {
+          if (error) {
+            setReferenceResults([]);
+            return;
+          }
+
           const loaded = ((data ?? []) as Array<ReferencedTicket & { status: string | null }>).filter(
             (item) => !referenceIds.includes(item.id)
           );
