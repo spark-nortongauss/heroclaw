@@ -121,7 +121,7 @@ export function TicketRow({
           aria-label={`Open attachments for ${ticket.issueKey}`}
         >
           <Paperclip className="h-3.5 w-3.5" />
-          <span>{attachmentLoading ? '…' : attachmentCount ?? '—'}</span>
+          <span>{attachmentLoading ? '…' : attachmentCount ?? 0}</span>
         </button>
       </TableCell>
       <TableCell className="py-2 text-xs text-muted-foreground">

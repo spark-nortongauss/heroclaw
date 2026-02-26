@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -149,7 +149,7 @@ export default function TicketsPage() {
     setTicketsData([]);
   }, [isAuthenticated]);
 
-  const loadAttachmentCount = async (ticketId: string) => {
+  const loadAttachmentCount = useCallback(async (ticketId: string) => {
     if (attachmentCountCache.current.has(ticketId) || loadingAttachmentIds[ticketId]) return;
 
     setLoadingAttachmentIds((prev) => ({ ...prev, [ticketId]: true }));
@@ -167,7 +167,8 @@ export default function TicketsPage() {
       delete next[ticketId];
       return next;
     });
-  };
+  }, [loadingAttachmentIds]);
+
 
   const ticketRows = useMemo<TicketRowItem[]>(() => {
     return ticketsData.map((ticket) => ({
@@ -194,6 +195,14 @@ export default function TicketsPage() {
       }),
     [assignee, priority, search, status, ticketRows]
   );
+
+
+  useEffect(() => {
+    for (const ticket of filtered) {
+      if (attachmentCountCache.current.has(ticket.id) || loadingAttachmentIds[ticket.id]) continue;
+      void loadAttachmentCount(ticket.id);
+    }
+  }, [filtered, loadAttachmentCount, loadingAttachmentIds]);
 
   const assignees = useMemo(() => ['all', ...new Set(ticketRows.map((ticket) => ticket.assignee))], [ticketRows]);
   const allVisibleSelected = filtered.length > 0 && filtered.every((ticket) => selectedIds.includes(ticket.id));
