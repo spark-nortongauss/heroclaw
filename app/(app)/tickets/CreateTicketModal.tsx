@@ -36,6 +36,7 @@ type CreateTicketModalProps = {
       ticket_no: number | null;
       title: string;
       status: string;
+      priority: string | null;
       owner_agent_id: string | null;
       reporter_agent_id: string | null;
       updated_at: string | null;
@@ -259,7 +260,7 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
         parent_ticket_id: parentTicketId,
         context
       })
-      .select('id, ticket_no, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
+      .select('id, ticket_no, title, status, priority, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
       .single();
 
     setIsSubmitting(false);
@@ -281,6 +282,7 @@ export default function CreateTicketModal({ open, onClose, onCreated }: CreateTi
             ticket_no: insertedTicket.ticket_no,
             title: insertedTicket.title,
             status: insertedTicket.status,
+            priority: insertedTicket.priority,
             owner_agent_id: insertedTicket.owner_agent_id,
             reporter_agent_id: insertedTicket.reporter_agent_id,
             updated_at: insertedTicket.updated_at,
