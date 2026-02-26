@@ -20,6 +20,7 @@ type TicketWithAgents = {
   ticket_no: number | null;
   title: string;
   status: string;
+  priority: string | null;
   owner_agent_id: string | null;
   reporter_agent_id: string | null;
   updated_at: string | null;
@@ -37,7 +38,7 @@ async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('mc_tickets')
-    .select('id, ticket_no, title, status, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
+    .select('id, ticket_no, title, status, priority, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
     .order('updated_at', { ascending: false });
 
   if (error) {
@@ -55,6 +56,7 @@ async function fetchTickets() {
     ticket_no: ticket.ticket_no,
     title: ticket.title,
     status: ticket.status,
+    priority: ticket.priority,
     owner_agent_id: ticket.owner_agent_id,
     reporter_agent_id: ticket.reporter_agent_id,
     updated_at: ticket.updated_at,
@@ -85,10 +87,12 @@ const normalizeStatus = (status: string): TicketRowItem['status'] => {
   return 'not_done';
 };
 
-const choosePriority = (status: string): TicketRowItem['priority'] => {
-  if (status === 'ongoing') return 'high';
-  if (status === 'not_done') return 'medium';
-  return 'low';
+const normalizePriority = (priority: string | null): TicketRowItem['priority'] => {
+  if (priority === 'highest' || priority === 'high' || priority === 'medium' || priority === 'low') {
+    return priority;
+  }
+  if (priority === 'urgent') return 'highest';
+  return 'medium';
 };
 
 export default function TicketsPage() {
@@ -175,7 +179,7 @@ export default function TicketsPage() {
       reporter: ticket.reporter_name?.trim() || 'Unknown',
       parent: null,
       updatedLabel: relativeTime(ticket.updated_at),
-      priority: choosePriority(ticket.status)
+      priority: normalizePriority(ticket.priority)
     }));
   }, [ticketsData]);
 
