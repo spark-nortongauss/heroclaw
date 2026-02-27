@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Json } from '@/lib/supabase/types';
 
 import TicketDetailClient from './TicketDetailClient';
+import TicketArtifactsPanel from './TicketArtifactsPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -204,25 +205,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
 
       <TicketDetailClient agents={agents} comments={comments} ticket={ticket} />
 
-      <section className="rounded-lg border border-border bg-card p-3">
-        <h2 className="text-sm font-semibold">Artifacts</h2>
-        <div className="mt-2 space-y-1 text-sm">
-          {artifactsError && <p className="text-red-600">Failed to load artifacts: {artifactsError.message}</p>}
-          {!artifactsError && artifacts.length === 0 && <p className="text-muted-foreground">No artifacts linked.</p>}
-          {artifacts.map((artifact) => (
-            <p key={artifact.id}>
-              {artifact.url ? (
-                <a className="underline" href={artifact.url} rel="noreferrer" target="_blank">
-                  {artifact.name ?? artifact.filename ?? artifact.kind ?? artifact.id}
-                </a>
-              ) : (
-                artifact.name ?? artifact.filename ?? artifact.kind ?? artifact.id
-              )}
-              {artifact.object_path ? <span className="text-muted-foreground"> · {artifact.object_path}</span> : null}
-            </p>
-          ))}
-        </div>
-      </section>
+      <TicketArtifactsPanel artifacts={artifacts} artifactsErrorMessage={artifactsError?.message ?? null} />
     </main>
   );
 }
