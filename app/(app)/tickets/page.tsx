@@ -14,6 +14,7 @@ import { TicketTable } from '@/components/ui/ticket-table';
 import CreateTicketModal from './CreateTicketModal';
 import type { TicketRowItem } from '@/components/ui/ticket-row';
 import { useLocale } from '@/components/providers/locale-provider';
+import { formatDate } from '@/lib/mission-control';
 
 type TicketWithAgents = {
   id: string;
@@ -23,6 +24,7 @@ type TicketWithAgents = {
   priority: string | null;
   owner_agent_id: string | null;
   reporter_agent_id: string | null;
+  due_at: string | null;
   updated_at: string | null;
   owner_name: string | null;
   reporter_name: string | null;
@@ -38,7 +40,7 @@ async function fetchTickets() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('mc_tickets')
-    .select('id, ticket_no, title, status, priority, owner_agent_id, reporter_agent_id, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
+    .select('id, ticket_no, title, status, priority, owner_agent_id, reporter_agent_id, due_at, updated_at, owner_agent:mc_agents!mc_tickets_owner_agent_id_fkey(display_name), reporter_agent:mc_agents!mc_tickets_reporter_agent_id_fkey(display_name)')
     .order('updated_at', { ascending: false });
 
   if (error) {
@@ -59,6 +61,7 @@ async function fetchTickets() {
     priority: ticket.priority,
     owner_agent_id: ticket.owner_agent_id,
     reporter_agent_id: ticket.reporter_agent_id,
+    due_at: ticket.due_at,
     updated_at: ticket.updated_at,
     owner_name: relationDisplayName(ticket.owner_agent),
     reporter_name: relationDisplayName(ticket.reporter_agent)
@@ -179,6 +182,7 @@ export default function TicketsPage() {
       assignee: ticket.owner_name?.trim() || 'Unassigned',
       reporter: ticket.reporter_name?.trim() || 'Unknown',
       parent: null,
+      dueDateLabel: formatDate(ticket.due_at),
       updatedLabel: relativeTime(ticket.updated_at),
       priority: normalizePriority(ticket.priority)
     }));

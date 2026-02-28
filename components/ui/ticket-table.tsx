@@ -51,6 +51,7 @@ export function TicketTable({
             <TableHeaderCell>Status</TableHeaderCell>
             <TableHeaderCell>Assignee</TableHeaderCell>
             <TableHeaderCell>Priority</TableHeaderCell>
+            <TableHeaderCell>Due date</TableHeaderCell>
             <TableHeaderCell>Updated</TableHeaderCell>
             <TableHeaderCell>Attachments</TableHeaderCell>
             <TableHeaderCell>Reporter</TableHeaderCell>
@@ -60,14 +61,14 @@ export function TicketTable({
         <TableBody>
           {loading && (
             <tr>
-              <TableCell colSpan={10}>
+              <TableCell colSpan={11}>
                 <Skeleton className="h-10 w-full" />
               </TableCell>
             </tr>
           )}
           {!loading && tickets.length === 0 && (
             <tr>
-              <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
+              <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                 {emptyText}
               </TableCell>
             </tr>

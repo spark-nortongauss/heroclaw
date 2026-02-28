@@ -15,6 +15,7 @@ export type TicketRowItem = {
   assignee: string;
   reporter?: string;
   parent?: string | null;
+  dueDateLabel: string;
   updatedLabel: string;
   priority: 'highest' | 'high' | 'medium' | 'low';
 };
@@ -104,6 +105,9 @@ export function TicketRow({
       </TableCell>
       <TableCell className="py-2">
         <PriorityBadge priority={ticket.priority} />
+      </TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">
+        {ticket.dueDateLabel}
       </TableCell>
       <TableCell className="py-2 text-xs text-muted-foreground">
         {ticket.updatedLabel}
