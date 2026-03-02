@@ -1,6 +1,6 @@
 # Mission Control UI
 
-Production-ready Next.js App Router interface for managing Clawdbot agents via Supabase.
+Production-ready Next.js App Router interface for managing Clawdbot agents, tickets, and Allan gateway workflows via Supabase.
 
 ## Stack
 - Next.js 14 + TypeScript
@@ -42,11 +42,17 @@ Production-ready Next.js App Router interface for managing Clawdbot agents via S
 ## Routes
 - `/login`: Supabase email magic link / OTP login
 - `/dashboard`: Metrics + recent activity
-- `/tickets`: Searchable ticket list with status filter
-- `/tickets/[id]`: Ticket details, status update, realtime comments
-- `/chat/allan`: Realtime chat channel
-- `/requests/new`: Structured request form + command preview
-- `POST /api/allan/request`: Stubbed gateway forwarding endpoint
+- `/tickets`: Searchable ticket list with filters and bulk actions
+- `/projects`: Project listing view
+- `/project-files`: File browser for project artifacts
+- `/board`: Board view for mission items
+
+## API routes
+- `POST /api/tickets`: create a ticket for the current authenticated agent mapping
+- `POST /api/allan/request`: forwards Allan requests to the configured gateway
+- `GET /api/allan-chat/history`: fetches Allan chat history from gateway-compatible endpoints
+- `GET /api/vm/status`: checks VM status
+- `POST /api/vm/restart`: restarts VM
 
 ## Deploy to Vercel
 1. Push this repo to GitHub.
